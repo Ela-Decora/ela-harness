@@ -1,0 +1,50 @@
+{
+  "description": "Harness do Claude Code: estado no início da sessão e guarda nas edições, no prompt e no fim do turno, pela trilha do perfil. Calado em projeto sem .claude/perfil.toml.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/nucleo/comum/gancho.py\" SessionStart"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/nucleo/comum/gancho.py\" PreToolUse",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/nucleo/comum/gancho.py\" UserPromptSubmit",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/nucleo/comum/gancho.py\" Stop",
+            "timeout": 900
+          }
+        ]
+      }
+    ]
+  }
+}

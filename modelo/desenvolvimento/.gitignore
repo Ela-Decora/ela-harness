@@ -1,0 +1,9 @@
+.claude/worktrees/
+.env
+.env.local
+.superpowers/
+__pycache__/
+.claude/settings.local.json
+**/.claude-plugin/types/
+.claude/harness/nucleo
+.harness-nucleo/

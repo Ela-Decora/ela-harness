@@ -1,0 +1,7 @@
+.DS_Store
+__pycache__/
+.claude/harness/aprovacao/
+.claude/harness/dossie/
+.claude/harness/nucleo
+.claude/worktrees/
+.harness-nucleo/

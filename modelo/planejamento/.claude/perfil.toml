@@ -1,0 +1,241 @@
+# Perfil do projeto para o harness de planejamento, criado por `harness.py iniciar`.
+# O harness (o plugin ela-harness) lê daqui tudo o que é deste projeto.
+# Toda edição pede confirmação (ask no .claude/settings.json): mudar o perfil muda o que os gates exigem.
+
+[projeto]
+nome = "{{PROJETO}}"
+harness = "planejamento"
+
+[caminhos]
+planejamento = "planejamento"
+status = "planejamento/STATUS.md"
+backlog = "planejamento/backlog.md"
+decisoes = "planejamento/decisoes.md"
+rascunho = "planejamento/rascunho.md"
+atritos = "docs/harness/atritos.md"
+# Estudos do assessor (pasta) e o arquivo dos ADRs, onde entra a decisão de um estudo quando ela é da camada dos ADRs.
+estudos = "docs/harness/estudos"
+adrs = "planejamento/3-avancado/decisao-stack.md"
+# Relatórios do leitor de fatos, uma pasta por documento: <pesquisas>/pesquisa-<documento>-<AAAA-MM-DD>/.
+pesquisas = "docs/referencias"
+# Em ordem de precedência, depois das decisões registradas e do rascunho. A primeira é a voz do cliente, lida inteira no passo 0.
+fontes = ["docs/referencias"]
+# Opcional: a legenda das siglas e dos tipos de ID, gerada por `harness.py legenda`, fora da pasta do planejamento.
+# Tire o "# " da linha para ligar.
+# legenda = "docs/legenda.md"
+
+[moldes]
+pasta = "planejamento/Templates"
+# Nome no molde → nome no documento, também nos títulos.
+trocas_de_nome = {}
+# Regex de texto do molde que não pode sobrar no documento.
+placeholders = ['<!--', 'RF-XXX', 'RNF-[A-Z]+-NN', 'RN-NN', '\bXX\b', '\[Início\]']
+# Padrão relativo à pasta do planejamento → molde relativo à pasta de moldes. Vence o primeiro que casa; `*` não
+# atravessa `/`. Sem nenhum, vale o mesmo caminho dentro da pasta de moldes.
+mapa = [
+  ["2-intermediario/Modulo/*.md", "2-intermediario/Templates/_modelo-modulo.md"],
+  ["2-intermediario/Tela/*.md", "2-intermediario/Templates/_modelo-tela.md"],
+  ["2-intermediario/Entidade/*.md", "2-intermediario/Templates/_modelo-entidade.md"],
+  ["2-intermediario/modelo-conceitual.md", "2-intermediario/Templates/modelo-conceitual.md"],
+]
+# Regex num título do molde → regex que o documento pode ter no lugar. Título com uma delas é repetível.
+partes_variaveis = { '<!--.*?-->' = '.+', 'XXX' = '[A-Z]+', '<MÓD>' = '[A-Z]+', '-NN\b' = '-[0-9]{2,}' }
+
+# obrigatorios: documentos que a camada precisa ter, relativos à pasta do planejamento; fronteira: onde está o corte do MVP que vale na camada.
+[[fases]]
+id = "1-inicial"
+gate = "G1"
+regra = "Linguagem do cliente: sem termo técnico, sem stack, sem nome de tecnologia."
+obrigatorios = ["1-inicial/visao-geral.md", "1-inicial/atores.md", "1-inicial/requisitos-negocio.md"]
+
+[[fases]]
+id = "2-intermediario"
+gate = "G2"
+regra = "Coluna de stack como [A DEFINIR no Avançado] até existir ADR."
+obrigatorios = ["2-intermediario/modelo-conceitual.md"]
+fronteira = 'item "Fora do MVP" das Premissas de planejamento/1-inicial/requisitos-negocio.md'
+
+[[fases]]
+id = "3-avancado"
+gate = "G3"
+regra = "Toda escolha de tecnologia em ADR, com um requisito como motivo."
+obrigatorios = ["3-avancado/decisao-stack.md", "3-avancado/modelo-fisico-e-diagramas.md"]
+fronteira = 'item "Fora do MVP" das Premissas de planejamento/1-inicial/requisitos-negocio.md'
+
+[ids]
+prefixos = ["RF", "RNF", "RN"]
+# Regex do ID sem o número; cada um começa por um dos prefixos.
+padroes = ['RF-[A-Z]+', 'RNF-(?:SEC|DIS|DES|USA)', 'RN']
+# A forma de cada ID no texto gerado do harness, na ordem dos prefixos.
+formas = ["RF-<DOMINIO>-NN", "RNF-SEC/DIS/DES/USA-NN", "RN-NN"]
+prefixo_pendencia = "PEND"
+
+[texto]
+# Regex, sem distinção de maiúsculas, procuradas como palavra inteira.
+adjetivos_vagos = [
+  'rápid[oa]s?', 'fácil', 'fáceis', 'intuitiv[oa]s?', 'amigáve(l|is)', 'robust[oa]s?', 'adequad[oa]s?',
+  'razoáve(l|is)', 'eficientes?', 'a maioria', 'geralmente', 'vári[oa]s', 'etc\.?', 'e/ou', 'conforme necessário',
+]
+duvidas_de_escopo = ["quem opera", "o que entra no MVP", "nome do produto", "prazo"]
+sistemas_do_cliente = []
+nomes_duplos = []
+glossario = 'seção "Glossário" de planejamento/2-intermediario/modelo-conceitual.md'
+
+# Opcional: o DER físico, com o DDL gerado por `harness.py der`. Tire o "# " das linhas para ligar. Os caminhos são
+# relativos à pasta do planejamento; `dialeto` é "" até o ADR do banco e depois "mysql" ou "postgres".
+# [der]
+# documento = "3-avancado/Diagramas/DataBase/der-fisico.md"
+# sql = "3-avancado/Diagramas/DataBase/SQL"
+# workbench = "3-avancado/Diagramas/DataBase/MySQLWB"
+# dialeto = ""
+# conceitual = "2-intermediario/modelo-conceitual.md"
+# entidades = "2-intermediario/Entidade"
+# tecnicas = ["id", "criado_em", "atualizado_em"]
+# rotulo_copia = "por cópia"
+
+# Opcional: caminhos, relativos à raiz, que o modelo não grava, com `/**` no fim para uma pasta. Tire o "# " das duas
+# linhas para ligar.
+# [guarda]
+# proibidos = ["docs/adr/**"]
+
+# Padrões de segredo do projeto, além dos do núcleo: a guarda e o sem-segredos recusam o texto que os casa. Uma linha por
+# padrão, no formato `nome-do-padrao = "expressão regular"`.
+[guarda.segredos]
+
+# Opcional: a passagem do planejamento para o repositório de código (`harness.py passagem`), que pede também
+# `caminhos.legenda`. `manifesto` é o arquivo, a partir da raiz, que o `passagem publicar` commita; `areas` diz onde
+# está a tabela das áreas do código: o documento (relativo à pasta do planejamento), o título da seção e o cabeçalho de
+# cada uma das duas colunas. Tire o "# " das linhas para ligar.
+# [passagem]
+# manifesto = "passagem/manifesto.json"
+# areas = { documento = "3-avancado/estrutura-do-codigo.md", secao = "Áreas do código", coluna_area = "Área", coluna_pastas = "Pastas" }
+
+[gates.G1]
+marcador_pendencia = "antes do G1"
+
+[[gates.G1.itens]]
+tipo = "script"
+verificacao = "artefatos-da-fase"
+
+[[gates.G1.itens]]
+tipo = "script"
+verificacao = "checar-da-fase"
+
+[[gates.G1.itens]]
+tipo = "script"
+verificacao = "pendencias-do-gate"
+
+[[gates.G1.itens]]
+tipo = "script"
+verificacao = "versao-limpa"
+
+[[gates.G1.itens]]
+tipo = "script"
+verificacao = "a-confirmar"
+
+[[gates.G1.itens]]
+tipo = "revisor"
+criterio = "Todo RF, RNF e RN com nota de pelo menos 2 em necessário, não ambíguo, singular e verificável."
+
+[[gates.G1.itens]]
+tipo = "revisor"
+criterio = "Nenhum termo técnico, nome de tecnologia ou stack (regra da camada 1)."
+
+[[gates.G1.itens]]
+tipo = "revisor"
+criterio = "Nenhuma contradição entre os documentos da camada nem com os Rulings de planejamento/decisoes.md; um nome só para cada conceito."
+
+[[gates.G1.itens]]
+tipo = "revisor"
+criterio = "As Decisões fixas do CLAUDE.md batem com os Rulings vigentes."
+
+[[gates.G1.itens]]
+tipo = "humano"
+criterio = "Aprovação do usuário, com data."
+
+[gates.G2]
+marcador_pendencia = "antes do G2"
+
+[[gates.G2.itens]]
+tipo = "script"
+verificacao = "artefatos-da-fase"
+
+[[gates.G2.itens]]
+tipo = "script"
+verificacao = "checar-da-fase"
+
+[[gates.G2.itens]]
+tipo = "script"
+verificacao = "ids-citados-definidos"
+
+[[gates.G2.itens]]
+tipo = "script"
+verificacao = "ids-cobertos"
+documentos = ["2-intermediario/Modulo/*.md"]
+prefixos = ["RF"]
+
+[[gates.G2.itens]]
+tipo = "script"
+verificacao = "secoes-com-id"
+documentos = ["2-intermediario/Modulo/*.md"]
+titulo = "### Funcionalidade"
+prefixos = ["RF"]
+
+[[gates.G2.itens]]
+tipo = "script"
+verificacao = "coluna-com-texto"
+documentos = ["2-intermediario/Modulo/*.md"]
+secao = "## Stack técnica do módulo"
+coluna = "Escolha"
+texto = "[A DEFINIR no Avançado]"
+
+[[gates.G2.itens]]
+tipo = "script"
+verificacao = "ligados"
+documentos = ["2-intermediario/Tela/*.md", "2-intermediario/Entidade/*.md"]
+por = ["2-intermediario/Modulo/*.md"]
+
+[[gates.G2.itens]]
+tipo = "script"
+verificacao = "er-sem-atributos"
+documentos = ["2-intermediario/modelo-conceitual.md"]
+
+[[gates.G2.itens]]
+tipo = "script"
+verificacao = "pendencias-do-gate"
+
+[[gates.G2.itens]]
+tipo = "script"
+verificacao = "versao-limpa"
+
+[[gates.G2.itens]]
+tipo = "script"
+verificacao = "a-confirmar"
+
+[[gates.G2.itens]]
+tipo = "revisor"
+criterio = "Cobertura semântica: cada módulo atende de fato os RF que cita."
+
+[[gates.G2.itens]]
+tipo = "revisor"
+criterio = "Cada funcionalidade é pequena, independente e testável, com critério de aceite."
+
+[[gates.G2.itens]]
+tipo = "revisor"
+criterio = "Os termos dos documentos são os do glossário do modelo-conceitual.md, um nome só para cada conceito."
+
+[[gates.G2.itens]]
+tipo = "revisor"
+criterio = "Nenhuma contradição entre os documentos da camada nem com os Rulings de planejamento/decisoes.md."
+
+[[gates.G2.itens]]
+tipo = "revisor"
+criterio = "As Decisões fixas do CLAUDE.md batem com os Rulings vigentes."
+
+[[gates.G2.itens]]
+tipo = "humano"
+criterio = "Escolha sobre o modelo lógico registrada: usar as entidades como modelo lógico, ou pular."
+
+[[gates.G2.itens]]
+tipo = "humano"
+criterio = "Aprovação do usuário, com data."

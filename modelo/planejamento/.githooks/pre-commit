@@ -1,0 +1,21 @@
+#!/bin/sh
+# Pre-commit do harness de planejamento: confere as invariantes do índice pelo lançador do projeto.
+raiz=$(git rev-parse --show-toplevel) || exit 0
+[ -f "$raiz/.claude/harness/harness.py" ] || exit 0
+# A raiz é a do commit, não a de uma sessão do Claude Code que tenha feito o commit.
+CLAUDE_PROJECT_DIR=$raiz
+export CLAUDE_PROJECT_DIR
+for py in python3 python; do
+  if command -v "$py" >/dev/null 2>&1; then
+    "$py" "$raiz/.claude/harness/harness.py" invariantes --indice
+    codigo=$?
+    # 3: o lançador não achou o núcleo (plugin não instalado nesta máquina).
+    if [ "$codigo" -eq 3 ]; then
+      echo "pre-commit do harness: núcleo não encontrado; invariantes não conferidas" >&2
+      exit 0
+    fi
+    exit "$codigo"
+  fi
+done
+echo "pre-commit do harness: python3 e python ausentes; invariantes não conferidas" >&2
+exit 0

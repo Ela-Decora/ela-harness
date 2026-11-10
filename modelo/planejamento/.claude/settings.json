@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "deny": [
+      "Edit(/planejamento/Templates/**)",
+      "Edit(/planejamento/STATUS.md)"
+    ],
+    "ask": [
+      "Edit(/planejamento/rascunho.md)",
+      "Edit(/.claude/perfil.toml)",
+      "Bash(python3 .claude/harness/harness.py passagem publicar --enviar:*)"
+    ]
+  },
+  "extraKnownMarketplaces": {
+    "ela-harness": {
+      "source": {
+        "source": "github",
+        "repo": "Ela-Decora/ela-harness",
+        "ref": "v0.3.0"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "ela-harness@ela-harness": true
+  }
+}

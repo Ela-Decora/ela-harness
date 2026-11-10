@@ -1,0 +1,18 @@
+{
+  "name": "ela-harness",
+  "owner": {
+    "name": "Ela Decora"
+  },
+  "plugins": [
+    {
+      "name": "ela-harness",
+      "source": "./",
+      "description": "Harness do Claude Code em duas trilhas, planejamento e desenvolvimento, com perfil por projeto."
+    },
+    {
+      "name": "ela-harness-papeis",
+      "source": "./papeis",
+      "description": "Troca o modelo e o esforço dos agentes do ciclo do bloco pela tabela do harness.py papel."
+    }
+  ]
+}

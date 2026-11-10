@@ -1,0 +1,14 @@
+#!/bin/sh
+# Pre-commit do harness: confere as invariantes do índice.
+raiz=$(git rev-parse --show-toplevel) || exit 0
+[ -f "$raiz/.claude/harness/harness.py" ] || exit 0
+# A raiz é a do commit, não a de uma sessão do Claude Code que tenha feito o commit.
+CLAUDE_PROJECT_DIR=$raiz
+export CLAUDE_PROJECT_DIR
+for py in python3 python; do
+  if command -v "$py" >/dev/null 2>&1; then
+    exec "$py" "$raiz/.claude/harness/harness.py" invariantes --indice
+  fi
+done
+echo "pre-commit do harness: python3 e python ausentes; invariantes não conferidas" >&2
+exit 0

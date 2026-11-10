@@ -1,0 +1,36 @@
+name: harness (desenvolvimento)
+description: O CI do projeto de desenvolvimento, na mesma versão do plugin que o .claude/settings.json fixa.
+runs:
+  using: composite
+  steps:
+    - name: python
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      with:
+        python-version: "3.12"
+    - name: git
+      shell: bash
+      run: |
+        export HARNESS_NUCLEO="$GITHUB_ACTION_PATH/../.."
+        git config --global user.name "harness-ci"
+        git config --global user.email "harness-ci@users.noreply.github.com"
+    - name: invariantes
+      shell: bash
+      env:
+        BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+      run: |
+        export HARNESS_NUCLEO="$GITHUB_ACTION_PATH/../.."
+        if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+          echo "::notice::sem base para comparar; invariantes puladas"
+        else
+          python .claude/harness/harness.py invariantes --base "$BASE" --verbose
+        fi
+    - name: instalacao
+      shell: bash
+      run: |
+        export HARNESS_NUCLEO="$GITHUB_ACTION_PATH/../.."
+        python .claude/harness/harness.py ci instalar
+    - name: verificacoes
+      shell: bash
+      run: |
+        export HARNESS_NUCLEO="$GITHUB_ACTION_PATH/../.."
+        python .claude/harness/harness.py verificar --momento finalizar

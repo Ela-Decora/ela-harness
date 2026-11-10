@@ -1,0 +1,63 @@
+# Perfil do repositório de código. As quatro chaves com <...> são da equipe: o perfil só valida com elas preenchidas.
+# O bloco que monta a stack acrescenta as verificações, a instalação do CI ([desenvolvimento.ci] instalar) e os comandos da lane (instalar, desmontar, portas, env_modelo).
+
+[projeto]
+nome = "<nome do projeto>"
+harness = "desenvolvimento"
+
+[desenvolvimento]
+ramo_principal = "main"
+
+[desenvolvimento.caminhos]
+blocos = "docs/blocos"
+backlog = "docs/backlog"
+passagem = "passagem"
+legenda = "docs/legenda.md"
+
+[desenvolvimento.passagem]
+repositorio = "<org>/<repositorio-de-planejamento>"
+legenda = "docs/legenda.md"
+
+[desenvolvimento.dono]
+nome = "<nome do dono>"
+github = "<usuario-do-github>"
+
+[[desenvolvimento.verificacoes]]
+nome = "harness"
+comando = "python3 .claude/harness/harness.py gerar --check"
+caminhos = []
+momentos = ["finalizar"]
+
+[desenvolvimento.modelos]
+revisor-bloco = { model = "opus", effort = "xhigh" }
+
+[desenvolvimento.registro]
+severidade_padrao = "major"
+
+[desenvolvimento.ci]
+instalar = []
+
+[desenvolvimento.lane]
+limite = 3
+pasta = ".claude/worktrees"
+env_copiados = [".env.local"]
+
+[desenvolvimento.lane.portas]
+
+[desenvolvimento.guarda]
+fora_da_lane = ["docs/**", ".claude/**"]
+
+[desenvolvimento.aceitacao]
+tempo_limite = 30
+
+[desenvolvimento.fichas]
+prefixo = "DEV"
+
+[desenvolvimento.codex]
+ligado = false
+
+# Opcional: com a tabela do Linear, ligam-se o harness.py linear espelhar e o aviso nas transições. Tire o "# " das
+# três linhas e preencha o time e o projeto; o projeto e os rótulos precisam existir no Linear.
+# [desenvolvimento.linear]
+# time = "<...>"
+# projeto = "<...>"

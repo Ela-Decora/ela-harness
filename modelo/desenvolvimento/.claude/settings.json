@@ -1,0 +1,24 @@
+{
+  "autoCompactWindow": 200000,
+  "permissions": {
+    "allow": [
+      "Bash(python3 .claude/harness/harness.py *)",
+      "Bash(git status *)",
+      "Bash(git log *)",
+      "Bash(git diff *)"
+    ]
+  },
+  "extraKnownMarketplaces": {
+    "ela-harness": {
+      "source": {
+        "source": "github",
+        "repo": "Ela-Decora/ela-harness",
+        "ref": "v0.3.0"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "ela-harness@ela-harness": true,
+    "ela-harness-papeis@ela-harness": true
+  }
+}
