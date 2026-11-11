@@ -1,0 +1,68 @@
+# Copiado uma vez do plugin ela-harness (ci/planejamento/diagramas.yml); o harness.py gerar não o toca.
+# Valida o Mermaid da pasta do planejamento e, com [der] no perfil, aplica o DDL num MySQL e num Postgres.
+# A versão do plugin sai da ref do .claude/settings.json, a mesma do harness.yml.
+name: diagramas
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  diagramas:
+    name: diagramas
+    runs-on: ubuntu-24.04
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: harness
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -pharness" --health-interval 5s --health-timeout 5s
+          --health-retries 30
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: harness
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - id: projeto
+        name: projeto
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, tomllib
+          with open(".claude/settings.json", encoding="utf-8") as arquivo:
+              print("ref=" + json.load(arquivo)["extraKnownMarketplaces"]["ela-harness"]["source"]["ref"])
+          with open(".claude/perfil.toml", "rb") as arquivo:
+              print("pasta=" + tomllib.load(arquivo)["caminhos"]["planejamento"])
+          PY
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: Ela-Decora/ela-harness
+          ref: ${{ steps.projeto.outputs.ref }}
+          path: .harness-nucleo
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: .harness-nucleo/nucleo/planejamento/ferramentas/package-lock.json
+      - run: npm ci --prefix .harness-nucleo/nucleo/planejamento/ferramentas
+      - name: mermaid
+        env:
+          PASTA: ${{ steps.projeto.outputs.pasta }}
+        run: node .harness-nucleo/nucleo/planejamento/ferramentas/validar-mermaid.mjs "$PASTA"
+      - name: bancos
+        env:
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_TCP_PORT: "3306"
+          MYSQL_PWD: harness
+          PGHOST: 127.0.0.1
+          PGUSER: postgres
+          PGPASSWORD: harness
+        run: python .harness-nucleo/nucleo/planejamento/ferramentas/bancos.py "$GITHUB_WORKSPACE"

@@ -9,10 +9,10 @@ O plugin `ela-harness-papeis`, do mesmo marketplace, entra só na trilha de dese
 
 ## Instalar
 
-Na raiz do repositório do projeto, com o `claude` no `PATH`, na versão `v0.3.1`:
+Na raiz do repositório do projeto, com o `claude` no `PATH`, na versão `v0.3.2`:
 
 ```bash
-claude plugin marketplace add Ela-Decora/ela-harness#v0.3.1 --scope project
+claude plugin marketplace add Ela-Decora/ela-harness#v0.3.2 --scope project
 claude plugin install ela-harness@ela-harness --scope project
 claude plugin install ela-harness-papeis@ela-harness --scope project
 ```

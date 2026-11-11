@@ -110,6 +110,11 @@ glossario = 'seção "Glossário" de planejamento/2-intermediario/modelo-conceit
 # manifesto = "passagem/manifesto.json"
 # areas = { documento = "3-avancado/estrutura-do-codigo.md", secao = "Áreas do código", coluna_area = "Área", coluna_pastas = "Pastas" }
 
+# O ramo em que o CI gerado (.github/workflows/harness.yml) dispara, no push e no pull request. Depois de mudar,
+# rode `harness.py gerar` e commite o harness.yml.
+[ci]
+ramo = "main"
+
 [gates.G1]
 marcador_pendencia = "antes do G1"
 

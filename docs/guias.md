@@ -51,7 +51,6 @@ em [`references/pacote.md`](../skills/refinar-documento/references/pacote.md).
 **Se der errado:**
 - Mais de 6 documentos: o modelo propõe dois pacotes, como as entidades num e as telas no outro.
 - `rode versao limpar antes de trocar o Pacote`: use `tirar <documento> do pacote` ou autorize o `versao limpar`.
-- `aprovo A e B` não vale, porque não há aprovação parcial: responda `aprovado`, `mudar` ou `tirar`.
 
 ## Revisar um documento aprovado
 
@@ -84,7 +83,6 @@ está em [`references/modo-revisao.md`](../skills/refinar-documento/references/m
    a copy of my diagram" ("Draw.io: Export To..." em `.svg` no VS Code; o "Convert To..." apaga o `.drawio`).
 5. Nos ADRs, cada decisão leva Status, Data, um requisito na Justificativa e as regras de arquitetura, `RA-NN` ou
    `nenhuma:` com o motivo; cada item mínimo aponta uma decisão.
-6. A CI do projeto, o check `harness`, só confere as invariantes; o Mermaid se valida no passo 4.
 
 **Se der errado:**
 - `prints do Workbench feitos de outra versão do DDL`: as tabelas mudaram depois dos prints; refaça o Workbench.
@@ -107,7 +105,6 @@ abaixo dele mostra os FAIL do gate antes de chamá-lo. O detalhe está em [`skil
 
 **Se der errado:**
 - Documento reprovado: a `gate-fase` não edita; corrija pela `/ela-harness:refinar-documento <documento>` e chame o gate de novo.
-- `<gate> fecha a fase <fase>, e a Fase atual é <fase>`: chame o gate da `Fase` atual.
 - `<gate> sem checklist no perfil`: escreva os itens em `[gates.<gate>]` ([Mudar o perfil](#mudar-o-perfil)).
 
 ## Rodar o leitor frio no gate
@@ -129,7 +126,6 @@ abaixo dele mostra os FAIL do gate antes de chamá-lo. O detalhe está em [`skil
 2. Confirme o envio; o `harness.py passagem publicar --enviar vN` empurra as tags que faltam no origin e fecha
    as issues `retorno` resolvidas, ou só as comenta quando outra pendência aberta as cita. Rodar de novo é seguro.
 3. `nada a publicar: igual a passagem/vN` quer dizer que a última passagem está em dia.
-4. As outras recusas dizem o que falta: commit, documento em edição, artefato não aprovado ou aviso da exportação.
 
 ## Decidir entre opções
 
@@ -231,10 +227,9 @@ está em [`references/entrevista.md`](../skills/refinar-documento/references/ent
 ou um termo do texto. As chaves e as regras estão em [perfil](referencia.md#perfil).
 
 1. Peça a mudança ao modelo, cuja edição do `.claude/perfil.toml` pede a sua confirmação, ou edite você mesmo.
-2. Rode `harness.py perfil`: `perfil válido: <nome>`, as fases com os gates, os checklists e os prefixos de ID.
-3. Rode `harness.py estado`: o `STATUS.md` segue válido com as fases e os gates do perfil.
-4. Rode `harness.py perfil --para <skill>` por skill: o bloco sai sem `ERRO` nem `AVISO: bloco com <N> caracteres`.
-5. Rode `harness.py gerar`, que refaz pelo perfil o `.claude/harness/gerado/planejamento.md`, e commite os dois.
+2. Rode `harness.py perfil` (`perfil válido: <nome>`, as fases, os checklists e os prefixos de ID), `harness.py estado` (o
+   `STATUS.md` segue válido) e `harness.py perfil --para <skill>` por skill, sem `ERRO` nem `AVISO: bloco com <N> caracteres`.
+3. Rode `harness.py gerar`, que refaz pelo perfil o `.claude/harness/gerado/planejamento.md`, e commite os dois.
 
 **Se der errado:**
 - `perfil inválido: <motivo>`: só o `ambiente` e o `referencia` rodam, e a guarda falha aberta; corrija a chave.
@@ -259,38 +254,44 @@ ou um termo do texto. As chaves e as regras estão em [perfil](referencia.md#per
 **Se der errado:**
 - `não é a raiz de um repositório git` ou `já tem o harness`: rode na raiz de um repositório sem o lançador.
 - `erro: núcleo do harness não encontrado`, com saída 3: o plugin não está instalado para esta pasta; rode o passo 1.
-- A linha `plugins: falta: ...` do `iniciar` traz o comando que faltou rodar.
 
-## Sair da origem privada
+## Validar os diagramas no CI
 
-**Quando:** o projeto veio da `v0.2.1` à `v0.2.7`, e o marketplace `ela-harness` do `.claude/settings.json` aponta a
-origem privada, que o CI baixa com o segredo `ELA_HARNESS_TOKEN`. É à mão, uma vez; sem migrar, segue com o token.
+**Quando:** há diagramas Mermaid no planejamento ou, com `[der]` no perfil, o DDL. Na raiz, copie o workflow do plugin e commite:
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ela-Decora/ela-harness/v0.3.2/ci/planejamento/diagramas.yml -o .github/workflows/diagramas.yml
+```
+O check `diagramas` valida o Mermaid de `caminhos.planejamento` e, com `[der]`, o DDL num MySQL e num Postgres, pela `ref`
+do `.claude/settings.json`. O `harness.py gerar` reescreve o `harness.yml` inteiro: o CI a mais vai em workflow próprio.
 
-1. Na raiz, troque o marketplace: o `add` grava no settings o `repo` `Ela-Decora/ela-harness` e a `ref`. O `remove`
-   desinstala os plugins e tira as entradas do `enabledPlugins`; os `install` as devolvem, o último só no desenvolvimento.
+## Atualizar o plugin
+
+**Quando:** sai uma versão nova, ou o CI ainda baixa o núcleo da origem privada com o segredo `ELA_HARNESS_TOKEN`. Uma
+vez por projeto, numa branch com PR ou, no planejamento sem PR, no ramo de trabalho; cada outro clone faz os passos 1 e 3.
+
+1. Na raiz, troque o marketplace; os `install` devolvem os plugins que o `remove` tira, o último só no desenvolvimento:
    ```bash
    claude plugin marketplace remove ela-harness --scope project
-   claude plugin marketplace add Ela-Decora/ela-harness#v0.3.1 --scope project
+   claude plugin marketplace add Ela-Decora/ela-harness#v0.3.2 --scope project
    claude plugin install ela-harness@ela-harness --scope project
    claude plugin install ela-harness-papeis@ela-harness --scope project
    ```
-2. Rode `harness.py gerar`: o `.github/workflows/harness.yml` sai gerado, sem token, e a guarda passa a protegê-lo.
-3. No desenvolvimento, com verificações além do harness, declare a stack em `[desenvolvimento.ci] instalar`, como
-   `["corepack enable", "pnpm install --frozen-lockfile"]`; ela roda só no CI, antes das verificações. O banco sobe
-   com `docker compose up -d`: o que vai com `&` morre no fim do comando.
-4. Commite e, se quiser, apague o segredo `ELA_HARNESS_TOKEN`. Cada outro clone roda só os `install`, uma vez. Com o
-   Dependabot, ponha `exclude-paths: [".github/workflows/harness.yml"]` no `github-actions` do `.github/dependabot.yml`.
+2. Faça o passo de migração da versão, no [`CHANGELOG.md`](../CHANGELOG.md). Vindo da origem, declare no desenvolvimento a stack em
+   `[desenvolvimento.ci] instalar`, como `["corepack enable", "pnpm install --frozen-lockfile"]`; o banco, com `docker compose up -d`.
+3. Feche as sessões do Claude Code abertas no projeto: os hooks delas refazem o link para o núcleo velho. Apague o link,
+   `rm -f .claude/harness/nucleo`, e, numa sessão nova ou no terminal, rode `harness.py gerar` e `harness.py gerar --check`.
+4. Commite e tire o `harness.yml` do robô de dependências: `exclude-paths: [".github/workflows/harness.yml"]` no
+   Dependabot, ou `{ "matchFileNames": [".github/workflows/harness.yml"], "enabled": false }` no `packageRules` do Renovate.
+   Com o CI verde, apague o segredo `ELA_HARNESS_TOKEN`, se havia; depois do merge, rode `git merge main` em cada lane.
 
 **Se der errado:**
-- `plugin: falta` no `harness.py iniciar --conferir`: o settings ainda aponta a origem; refaça o passo 1.
-- `harness.yml: o plugin carregado é v<X> e o .claude/settings.json fixa <ref>; reinstale o plugin`: refaça o passo 1.
-- PR do Dependabot no `harness.yml`, vermelho com `desatualizado`: feche-o; o arquivo sobe com o `harness.py gerar`.
-- `<nome>: a saída diz que falta o comando <cmd>`, no CI: instale-o no passo 3. O `harness.yml` gerado não leva
-  `secrets`, e não se edita: verificação que pede segredo do GitHub não roda no CI.
+- `harness.yml: o plugin carregado é v<X> ...` ou `harness.yml: o .claude/settings.json não fixa ...`: refaça o 1 e o 3.
+- `plugin: falta` no `harness.py iniciar --conferir`, que é do desenvolvimento: o settings ainda aponta a origem; refaça o 1.
+- `<nome>: a saída diz que falta o comando <cmd>`, no CI: declare-o no passo 2. O `harness.yml` gerado não leva `secrets`.
 
 ## Relatar um problema
 
 **Quando:** um comando falha sem dizer o que fazer, uma saída contradiz o manual ou falta uma peça. Abra uma issue em
 [`Ela-Decora/ela-harness`](https://github.com/Ela-Decora/ela-harness/issues); pull request de fora não entra. Traga a
 versão (a `ref` do `.claude/settings.json`), a trilha, o comando ou a skill e a saída, sem nomes, dados nem segredos do
-projeto. A correção chega numa versão nova: troque a `ref`, reinstale o plugin e rode `harness.py gerar`.
+projeto. A correção chega numa versão nova: [Atualizar o plugin](#atualizar-o-plugin).

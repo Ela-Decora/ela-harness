@@ -42,8 +42,8 @@ Inicia um projeto pelo plugin, nas duas trilhas (spec do porte 1, §7.5), ou con
   `ref` instalada fica. Com algo acrescentado, a linha é `mesclado: .claude/settings.json`; sem nada, `mantido:`. Liga o
   `core.hooksPath` aos githooks e instala os plugins da trilha pelo `claude plugin`, com o `--scope project`: o
   `ela-harness` e, no desenvolvimento, o `ela-harness-papeis`. O `.github/workflows/harness.yml` não vem do modelo:
-  o `iniciar` o escreve, nas duas trilhas, igual ao do `gerar`, com o ramo do perfil (`main` no planejamento), lido
-  sem validar o perfil, e a `ref` do settings já mesclado. O arquivo que já existe fica, com `mantido:`. A `ref`
+  o `iniciar` o escreve, nas duas trilhas, igual ao do `gerar`, com o ramo do perfil (no planejamento, o `[ci] ramo`,
+  `main` sem ele), lido sem validar o perfil, e a `ref` do settings já mesclado. O arquivo que já existe fica, com `mantido:`. A `ref`
   que não é a tag da versão do plugin carregado, ou o settings sem `ref`, dá a linha da recusa e nenhum arquivo, sem recusar o `iniciar`. O
   núcleo, as skills, os agentes e o workflow vêm do plugin e não são copiados.
 - Com o `git config` falhando, sem o `claude` ou com ele falhando, a cópia fica, a linha do `core.hooksPath` ou a dos
@@ -55,7 +55,10 @@ Inicia um projeto pelo plugin, nas duas trilhas (spec do porte 1, §7.5), ou con
   `.claude/settings.json: não é um objeto JSON; corrija o arquivo e rode o iniciar de novo`.
 - `harness.py iniciar --conferir`: roda dentro do repositório de código e diz o que ainda falta para o primeiro
   bloco, um item por linha, na ordem: `perfil`, `plugin`, `githooks`, `.gitignore`, `ci`, `passagem`, `invariantes`,
-  `instalado` e, só com a `[desenvolvimento.linear]` no perfil válido, `linear` (o item 9). O item `plugin` confere, no
+  `instalado` e, só com a `[desenvolvimento.linear]` no perfil válido, `linear` (o item 9). No repositório de
+  planejamento, com o `.claude/perfil.toml` legível e o `[projeto] harness` diferente de `desenvolvimento`, recusa antes
+  de conferir, com `iniciar --conferir: é do repositório de código; no planejamento, rode harness.py gerar --check`, e
+  sai com 1. O item `plugin` confere, no
   `.claude/settings.json`, o `extraKnownMarketplaces.ela-harness` do GitHub `Ela-Decora/ela-harness`, com `ref`, e os
   dois plugins no `enabledPlugins`, e depois o lançador. O item `instalado` confere os dois plugins habilitados para a
   pasta ou para o usuário, pelo `claude plugin list --json`, com o tempo limite de 30 s: a instalação vale por pasta,
@@ -92,6 +95,7 @@ WORKFLOW = "workflows/revisao-do-bloco.js"
 TEMPO_DO_CLAUDE = 60
 TEMPO_DA_LISTA_DO_CLAUDE = 30
 RAMO_PADRAO = "main"
+RECUSA_NO_PLANEJAMENTO = "iniciar --conferir: é do repositório de código; no planejamento, rode harness.py gerar --check"
 BACKLOG_PADRAO = "docs/backlog"
 BACKLOG_DO_MODELO = "docs/backlog/README.md"
 MARCA_DO_NOME = "{{PROJETO}}"
@@ -165,6 +169,29 @@ def _valores_do_perfil(destino: Path) -> tuple[str, str]:
     backlog = caminhos.get("backlog") if isinstance(caminhos, dict) else None
     return (ramo if isinstance(ramo, str) and ramo else RAMO_PADRAO,
             backlog if isinstance(backlog, str) and backlog else BACKLOG_PADRAO)
+
+
+def _ramo_do_planejamento(destino: Path) -> str:
+    """O `[ci] ramo` do `.claude/perfil.toml` do destino, lido como TOML, sem validar; `main` quando o perfil não se
+    lê, quando o `ci` não é uma tabela ou quando o `ramo` não é um texto não vazio."""
+    try:
+        dados = perfil_comum.ler_dados(destino / ".claude" / "perfil.toml")
+    except (OSError, UnicodeDecodeError, perfil_comum.PerfilInvalido):
+        return RAMO_PADRAO
+    tabela = dados.get("ci")
+    ramo = tabela.get("ramo") if isinstance(tabela, dict) else None
+    return ramo if isinstance(ramo, str) and ramo.strip() else RAMO_PADRAO
+
+
+def recusa_do_planejamento(raiz: Path) -> str | None:
+    """A linha da recusa do `--conferir` quando a raiz é de planejamento: o perfil legível e o `[projeto] harness`
+    diferente de `desenvolvimento`, o que inclui o TOML sem a tabela `[projeto]`. Sem o perfil legível, ou no
+    desenvolvimento, `None`: quem confere o perfil é o `conferir`."""
+    try:
+        dados = perfil_comum.ler_dados(raiz / ".claude" / "perfil.toml")
+    except (OSError, UnicodeDecodeError, perfil_comum.PerfilInvalido):
+        return None
+    return RECUSA_NO_PLANEJAMENTO if perfil_comum.trilha_dos_dados(dados) == PLANEJAMENTO else None
 
 
 def _recusar_antes_de_gravar(destino: Path, trilha: str, executar) -> None:
@@ -408,7 +435,8 @@ def iniciar(destino: Path, trilha: str, claude: str | None, nome: str | None = N
             continue
         alvo = f"{backlog}/README.md" if trilha == DESENVOLVIMENTO and relativo == BACKLOG_DO_MODELO else relativo
         copia.arquivo(modelo / relativo, alvo, trocas)
-    recusas_do_ci = _escrever_o_ci(destino, trilha, ramo if trilha == DESENVOLVIMENTO else RAMO_PADRAO, copia.mantidos)
+    ramo_do_ci = ramo if trilha == DESENVOLVIMENTO else _ramo_do_planejamento(destino)
+    recusas_do_ci = _escrever_o_ci(destino, trilha, ramo_do_ci, copia.mantidos)
     copia.arquivo(ORIGEM / LANCADOR, LANCADOR_NO_PROJETO)
     os.chmod(destino / LANCADOR_NO_PROJETO, 0o755)
     com_workflow = COPIA_O_WORKFLOW and trilha == DESENVOLVIMENTO

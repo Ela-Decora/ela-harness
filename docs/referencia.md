@@ -878,6 +878,9 @@ Seções e chaves, todas obrigatórias, menos `[gates]` e as opcionais:
 - `[passagem]`, opcional: `manifesto`, o caminho a partir da raiz que o `passagem publicar` commita; `areas`, uma
   tabela com `documento` (relativo à pasta do planejamento), `secao` (o texto do título, sem os `#`), `coluna_area`
   e `coluna_pastas`. Sem a seção, o `passagem exportar` recusa.
+- `[ci]`, opcional, com chave desconhecida recusada: `ramo`, o ramo em que o `.github/workflows/harness.yml` gerado
+  dispara, no push e no pull request; sem a tabela ou sem a chave, `main`. Com espaço, com `..` ou começando por `-`,
+  é recusado.
 - `[gates.<gate>]`: `marcador_pendencia` e os `[[gates.<gate>.itens]]`, numerados na ordem do arquivo, com `tipo`
   `script` (e `verificacao`, uma das do `harness.py gate`, com os parâmetros como chaves do item), `revisor`,
   `leitor-frio` ou `humano` (e `criterio`); o `leitor-frio` pede `caminhos.leitor_frio`, `[leitor_frio] perguntas`
@@ -1639,8 +1642,8 @@ Inicia um projeto pelo plugin, nas duas trilhas (spec do porte 1, §7.5), ou con
   `ref` instalada fica. Com algo acrescentado, a linha é `mesclado: .claude/settings.json`; sem nada, `mantido:`. Liga o
   `core.hooksPath` aos githooks e instala os plugins da trilha pelo `claude plugin`, com o `--scope project`: o
   `ela-harness` e, no desenvolvimento, o `ela-harness-papeis`. O `.github/workflows/harness.yml` não vem do modelo:
-  o `iniciar` o escreve, nas duas trilhas, igual ao do `gerar`, com o ramo do perfil (`main` no planejamento), lido
-  sem validar o perfil, e a `ref` do settings já mesclado. O arquivo que já existe fica, com `mantido:`. A `ref`
+  o `iniciar` o escreve, nas duas trilhas, igual ao do `gerar`, com o ramo do perfil (no planejamento, o `[ci] ramo`,
+  `main` sem ele), lido sem validar o perfil, e a `ref` do settings já mesclado. O arquivo que já existe fica, com `mantido:`. A `ref`
   que não é a tag da versão do plugin carregado, ou o settings sem `ref`, dá a linha da recusa e nenhum arquivo, sem recusar o `iniciar`. O
   núcleo, as skills, os agentes e o workflow vêm do plugin e não são copiados.
 - Com o `git config` falhando, sem o `claude` ou com ele falhando, a cópia fica, a linha do `core.hooksPath` ou a dos
@@ -1652,7 +1655,10 @@ Inicia um projeto pelo plugin, nas duas trilhas (spec do porte 1, §7.5), ou con
   `.claude/settings.json: não é um objeto JSON; corrija o arquivo e rode o iniciar de novo`.
 - `harness.py iniciar --conferir`: roda dentro do repositório de código e diz o que ainda falta para o primeiro
   bloco, um item por linha, na ordem: `perfil`, `plugin`, `githooks`, `.gitignore`, `ci`, `passagem`, `invariantes`,
-  `instalado` e, só com a `[desenvolvimento.linear]` no perfil válido, `linear` (o item 9). O item `plugin` confere, no
+  `instalado` e, só com a `[desenvolvimento.linear]` no perfil válido, `linear` (o item 9). No repositório de
+  planejamento, com o `.claude/perfil.toml` legível e o `[projeto] harness` diferente de `desenvolvimento`, recusa antes
+  de conferir, com `iniciar --conferir: é do repositório de código; no planejamento, rode harness.py gerar --check`, e
+  sai com 1. O item `plugin` confere, no
   `.claude/settings.json`, o `extraKnownMarketplaces.ela-harness` do GitHub `Ela-Decora/ela-harness`, com `ref`, e os
   dois plugins no `enabledPlugins`, e depois o lançador. O item `instalado` confere os dois plugins habilitados para a
   pasta ou para o usuário, pelo `claude plugin list --json`, com o tempo limite de 30 s: a instalação vale por pasta,
@@ -1730,13 +1736,14 @@ Recusa com 1, sem gravar, e o `--check` recusa igual, com uma linha por falha, n
 - a do agente do ciclo que falta, não se lê ou não tem o `model` ou o `effort` no frontmatter, com a recusa do
   `papel`, como `papel: falta o agente <nome> em <pasta>`; essa falha sai sozinha.
 
-Nas duas trilhas, o comando escreve também o `.github/workflows/harness.yml`, o CI do projeto, com o ramo principal do
-perfil e a versão que o `.claude/settings.json` fixa em `extraKnownMarketplaces.ela-harness.source.ref`; o `--check` o
-confere byte a byte, com os mesmos `ausente` e `desatualizado`. Ele não entra nas pastas do gerador nem nos órfãos. Sem
-o settings, o arquivo fica de fora. Duas recusas, com 1, que não impedem a gravação dos outros arquivos:
+Nas duas trilhas, o comando escreve também o `.github/workflows/harness.yml`, o CI do projeto, com o ramo do perfil (o
+`ramo_principal` no desenvolvimento e o `[ci] ramo` no planejamento, `main` sem ele) e a versão que o
+`.claude/settings.json` fixa em `extraKnownMarketplaces.ela-harness.source.ref`; o `--check` o confere byte a byte,
+com os mesmos `ausente` e `desatualizado`. Ele não entra nas pastas do gerador nem nos órfãos. Sem o settings, o
+arquivo fica de fora. Duas recusas, com 1, que não impedem a gravação dos outros arquivos:
 
-- `harness.yml: o plugin carregado é v<versão> e o .claude/settings.json fixa <ref>; reinstale o plugin`, quando a
-  `ref` não é `v<versão do plugin carregado>`;
+- `harness.yml: o plugin carregado é v<versão> e o .claude/settings.json fixa <ref>; reinstale o plugin e depois apague
+  o link .claude/harness/nucleo ou abra uma sessão nova`, quando a `ref` não é `v<versão do plugin carregado>`;
 - `harness.yml: o .claude/settings.json não fixa a versão do plugin (<motivo>); rode harness.py iniciar --conferir`,
   quando o settings não é um JSON legível com a `ref`.
 
@@ -2954,7 +2961,7 @@ refaz o espelho das fichas no Linear, sem duplicar nada
 | `gerar-modulos` | skill | Gera em rascunho as entidades, as telas e os módulos da camada a partir do escopo aprovado, com o usuário só nas dúvidas, quando o harness.py proximo a recomenda; cada módulo segue depois para o refinar-documento. | — | `harness.py perfil` | o da sessão |
 | `implementador-integracao` | agente | Implements one plan task that spans several files or needs a pattern decision, and makes the first and second fix of a block review. Dispatched by the SDD loop and by the review loop. Edits files and commits. | — | as da sessão | sonnet |
 | `implementador-mecanico` | agente | Implements one plan task whose code is already written in the plan, in one or two files. Dispatched by the SDD loop for mechanical tasks. Edits files and commits. | — | as da sessão | sonnet |
-| `iniciar` | skill | Inicia um projeto de planejamento ou um repositório de código a partir do modelo do plugin: o modelo da trilha, o lançador, os githooks e os plugins da trilha. Use com /ela-harness:iniciar &lt;trilha> [nome do projeto]. | `<trilha> [nome do projeto]` | `harness.py "` | o da sessão |
+| `iniciar` | skill | Inicia um projeto de planejamento ou um repositório de código a partir do modelo do plugin: o modelo da trilha, o lançador, os githooks e os plugins da trilha. Use com /ela-harness:iniciar &lt;trilha> [nome do projeto]. | `<trilha> [nome do projeto]` | `harness.py "`, `harness.py iniciar` | o da sessão |
 | `pesquisador-fatos` | agente | Levanta fatos com fonte que um pacote de documentos do planejamento precisa, nas fontes locais e, para sistemas externos, na web. Só leitura. Use apenas quando a skill refinar-documento mandar, no passo 0. | — | `Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch` | sonnet |
 | `pesquisador-opcoes` | agente | Pesquisa fatos com fonte sobre as opções de uma decisão de planejamento, na web e nas fontes locais. Só leitura. Use apenas quando a skill assessor mandar. | — | `Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch` | sonnet |
 | `planejar-bloco` | skill | Planeja um bloco do código a partir de uma ficha ou de um pedido em texto livre, até o plano pronto para execução, com a spec aprovada pelo dono. Use quando o dono pedir para planejar uma ficha ou corrigir um defeito, ou quando o bloco status disser /ela-harness:planejar-bloco. | `[<ficha> \| texto livre]` | `harness.py bloco` | o da sessão |

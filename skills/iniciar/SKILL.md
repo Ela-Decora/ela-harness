@@ -3,7 +3,7 @@ name: iniciar
 description: Inicia um projeto de planejamento ou um repositório de código a partir do modelo do plugin: o modelo da trilha, o lançador, os githooks e os plugins da trilha. Use com /ela-harness:iniciar <trilha> [nome do projeto].
 argument-hint: "<trilha> [nome do projeto]"
 disable-model-invocation: true
-allowed-tools: Bash(python3 "${CLAUDE_PLUGIN_ROOT}/nucleo/comum/harness.py" iniciar *)
+allowed-tools: Bash(python3 "${CLAUDE_PLUGIN_ROOT}/nucleo/comum/harness.py" iniciar *), Bash(python3 ${CLAUDE_PLUGIN_ROOT}/nucleo/comum/harness.py iniciar *)
 ---
 
 # Iniciar um projeto

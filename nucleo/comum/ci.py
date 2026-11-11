@@ -4,7 +4,7 @@
 
 O `gerar` lê o settings pelo `ler` que recebe e devolve `{}` quando ele não existe. As recusas sobem como
 `RecusaDoCi`, com a linha inteira em `.motivo`. Os SHAs das actions moram aqui, numa definição só, que o gerador e os
-testes dos `action.yml` leem.
+testes dos `action.yml` e do `ci/planejamento/diagramas.yml` leem.
 """
 from __future__ import annotations
 
@@ -19,6 +19,10 @@ CAMINHO = ".github/workflows/harness.yml"
 DISTRIBUICAO = "Ela-Decora/ela-harness"
 CHECKOUT = ("11d5960a326750d5838078e36cf38b85af677262", "v4.4.0")
 SETUP_PYTHON = ("a26af69be951a213d495a4c3e4e4022e16d87065", "v5.6.0")
+SETUP_NODE = ("49933ea5288caeca8642d1e84afbd3f7d6820020", "v4.4.0")
+_ACTIONS = {
+    CHECKOUT: "actions/checkout", SETUP_PYTHON: "actions/setup-python", SETUP_NODE: "actions/setup-node",
+}
 
 SETTINGS = ".claude/settings.json"
 MOTIVO_FORA_DO_UTF8 = "fora do UTF-8"
@@ -76,9 +80,9 @@ class RecusaDoCi(Exception):
 
 
 def uses(par: tuple[str, str]) -> str:
-    """O `uses` de uma action fixada: `<repo>@<sha> # <versão>`, a partir de `CHECKOUT` ou `SETUP_PYTHON`."""
-    repositorio = "actions/checkout" if par == CHECKOUT else "actions/setup-python"
-    return f"{repositorio}@{par[0]} # {par[1]}"
+    """O `uses` de uma action fixada: `<repo>@<sha> # <versão>`, a partir de `CHECKOUT`, `SETUP_PYTHON` ou
+    `SETUP_NODE`."""
+    return f"{_ACTIONS[par]}@{par[0]} # {par[1]}"
 
 
 def recusa_do_settings(motivo: str) -> RecusaDoCi:
@@ -119,7 +123,8 @@ def conferir_versao(ref: str, versao: str) -> None:
     """Recusa quando a `ref` do settings não é a tag da versão do núcleo carregado."""
     if ref != "v" + versao:
         raise RecusaDoCi(
-            f"{PREFIXO}o plugin carregado é v{versao} e o {SETTINGS} fixa {ref}; reinstale o plugin"
+            f"{PREFIXO}o plugin carregado é v{versao} e o {SETTINGS} fixa {ref}; reinstale o plugin e depois "
+            "apague o link .claude/harness/nucleo ou abra uma sessão nova"
         )
 
 

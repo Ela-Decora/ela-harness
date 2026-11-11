@@ -24,7 +24,7 @@ python3 .claude/harness/harness.py ambiente
 | Arquivo | Para quê |
 |---|---|
 | [Tutorial](tutorial.md) | o primeiro documento, do ambiente ao commit, passo a passo |
-| [Guias](guias.md) | um guia por tarefa: documento, pacote, gate, recusa, perfil, projeto novo, migração |
+| [Guias](guias.md) | um guia por tarefa: documento, pacote, gate, recusa, perfil, projeto novo, diagramas no CI, atualização |
 | [Referência](referencia.md) | cada comando, skill e agente, gerada por `harness.py referencia --gravar` |
 | [Explicação](explicacao.md) | os porquês do desenho e os limites |
 

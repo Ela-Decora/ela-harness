@@ -633,7 +633,12 @@ def _comando_iniciar(args: argparse.Namespace) -> int:
         return 1
     try:
         if args.conferir:
-            linhas = iniciar.conferir(comum.raiz_dos_comandos(), shutil.which("claude"))
+            raiz = comum.raiz_dos_comandos()
+            recusa = iniciar.recusa_do_planejamento(raiz)
+            if recusa is not None:
+                print(recusa)
+                return 1
+            linhas = iniciar.conferir(raiz, shutil.which("claude"))
         else:
             pasta = Path(args.pasta if args.pasta is not None else ".")
             linhas = iniciar.iniciar(pasta, args.trilha, shutil.which("claude"), args.nome)

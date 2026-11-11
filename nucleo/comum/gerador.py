@@ -98,13 +98,14 @@ Recusa com 1, sem gravar, e o `--check` recusa igual, com uma linha por falha, n
 - a do agente do ciclo que falta, não se lê ou não tem o `model` ou o `effort` no frontmatter, com a recusa do
   `papel`, como `papel: falta o agente <nome> em <pasta>`; essa falha sai sozinha.
 
-Nas duas trilhas, o comando escreve também o `.github/workflows/harness.yml`, o CI do projeto, com o ramo principal do
-perfil e a versão que o `.claude/settings.json` fixa em `extraKnownMarketplaces.ela-harness.source.ref`; o `--check` o
-confere byte a byte, com os mesmos `ausente` e `desatualizado`. Ele não entra nas pastas do gerador nem nos órfãos. Sem
-o settings, o arquivo fica de fora. Duas recusas, com 1, que não impedem a gravação dos outros arquivos:
+Nas duas trilhas, o comando escreve também o `.github/workflows/harness.yml`, o CI do projeto, com o ramo do perfil (o
+`ramo_principal` no desenvolvimento e o `[ci] ramo` no planejamento, `main` sem ele) e a versão que o
+`.claude/settings.json` fixa em `extraKnownMarketplaces.ela-harness.source.ref`; o `--check` o confere byte a byte,
+com os mesmos `ausente` e `desatualizado`. Ele não entra nas pastas do gerador nem nos órfãos. Sem o settings, o
+arquivo fica de fora. Duas recusas, com 1, que não impedem a gravação dos outros arquivos:
 
-- `harness.yml: o plugin carregado é v<versão> e o .claude/settings.json fixa <ref>; reinstale o plugin`, quando a
-  `ref` não é `v<versão do plugin carregado>`;
+- `harness.yml: o plugin carregado é v<versão> e o .claude/settings.json fixa <ref>; reinstale o plugin e depois apague
+  o link .claude/harness/nucleo ou abra uma sessão nova`, quando a `ref` não é `v<versão do plugin carregado>`;
 - `harness.yml: o .claude/settings.json não fixa a versão do plugin (<motivo>); rode harness.py iniciar --conferir`,
   quando o settings não é um JSON legível com a `ref`.
 
@@ -577,10 +578,10 @@ def gravar(raiz: Path, textos: dict[str, str], problemas_: list[tuple[str, str]]
 def textos_do_ci(ler: Callable[[str], str | None], perfil,
                  versao: str | None = None) -> tuple[dict[str, str], tuple[str, ...]]:
     """Os textos do `harness.yml` do projeto (vazio sem o `.claude/settings.json`) e as recusas dele, cada uma uma
-    linha. O ramo é o `ramo_principal` do perfil de desenvolvimento e `main` no de planejamento. A `ref` do settings
-    tem de ser `v<versao>`, com a `versao` None valendo a do núcleo carregado: senão a recusa é de versão."""
+    linha. O ramo é o `ramo_principal` do perfil de desenvolvimento e o `ramo_do_ci` no de planejamento. A `ref` do
+    settings tem de ser `v<versao>`, com a `versao` None valendo a do núcleo carregado: senão a recusa é de versão."""
     if isinstance(perfil, Perfil):
-        trilha, ramo = perfil_comum.PLANEJAMENTO, "main"
+        trilha, ramo = perfil_comum.PLANEJAMENTO, perfil.ramo_do_ci
     else:
         trilha, ramo = perfil_comum.DESENVOLVIMENTO, perfil.ramo_principal
     try:

@@ -214,6 +214,12 @@ def trilha(raiz: Path) -> str:
         dados = ler_dados(raiz / comum.CAMINHO_PERFIL)
     except PerfilInvalido:
         return PLANEJAMENTO
+    return trilha_dos_dados(dados)
+
+
+def trilha_dos_dados(dados: dict) -> str:
+    """A trilha de um TOML já lido: `desenvolvimento` só com `[projeto] harness = "desenvolvimento"`; em qualquer outro
+    caso, inclusive sem a tabela `[projeto]`, `planejamento`."""
     projeto = dados.get("projeto")
     if isinstance(projeto, dict) and projeto.get("harness") == DESENVOLVIMENTO:
         return DESENVOLVIMENTO

@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.3.2 — 2026-11-11
+
+As arestas da migração dos projetos para a distribuição pública: o `iniciar --conferir` que recusa no planejamento, o comando do `iniciar` sem aspas que passa sem pedir permissão, os diagramas e o ramo do CI do planejamento, o link velho do núcleo e o guia de atualização do plugin.
+
+### O que mudou desde a 0.3.1
+
+- O `harness.py iniciar --conferir` recusa no repositório de planejamento, com o perfil legível e o `[projeto] harness` diferente de `desenvolvimento`, antes de conferir qualquer item, com `iniciar --conferir: é do repositório de código; no planejamento, rode harness.py gerar --check`, e sai com 1. Antes, ele dava faltas que não valiam para o planejamento. Sem perfil ou com o perfil ilegível, a conferência segue como antes, com `perfil: falta`.
+- O `allowed-tools` da `/ela-harness:iniciar` traz duas regras, que casam o comando com e sem aspas em volta do `${CLAUDE_PLUGIN_ROOT}`: a skill deixa de pedir permissão quando o modelo escreve o caminho expandido sem aspas.
+- O `bancos.py` passa a sair na distribuição, e o plugin traz o `ci/planejamento/diagramas.yml`, o workflow do check `diagramas`: valida o Mermaid da pasta do planejamento e, com `[der]` no perfil, aplica o DDL num MySQL e num Postgres e compara o `workbench.sql` com o `schema.mysql.sql`. O projeto o copia uma vez, pelo guia "Validar os diagramas no CI", para o `.github/workflows/diagramas.yml`; o `harness.py gerar` não o escreve nem o confere, e a versão do plugin sai da `ref` do `.claude/settings.json`, como no `harness.yml`. A referência `camada-3.md` da `/ela-harness:refinar-documento` passa a dizer que o CI do projeto só valida o Mermaid e compara o `workbench.sql` com esse workflow.
+- A recusa de versão diz como sair do link velho do núcleo: `harness.yml: o plugin carregado é v<X> e o .claude/settings.json fixa <ref>; reinstale o plugin e depois apague o link .claude/harness/nucleo ou abra uma sessão nova`. A linha chega ao `gerar`, ao `gerar --check`, ao `gerados-em-dia`, ao `iniciar` e ao item `ci` do `iniciar --conferir`. Ela só aparece quando o núcleo em uso já é o `0.3.2`; no salto da `0.3.1`, quem roda é o núcleo velho, que diz só `reinstale o plugin`.
+- O perfil do planejamento ganha a tabela `[ci]`, opcional, com a chave `ramo`: o ramo em que o `harness.yml` gerado dispara, no push e no pull request, `main` sem ela. O `gerar`, o `gerar --check`, a `gerados-em-dia` e o `iniciar planejamento` a leem. As recusas, todas depois de `perfil inválido: `, são `[ci] deve ser uma tabela`, `ci com chave desconhecida: <chave>`, `ci.ramo deve ser um texto não vazio` e `ci.ramo fora do formato de branch: <ramo>`, esta com espaço, com `..` ou com `-` no começo. O modelo do perfil do planejamento traz `[ci]` com `ramo = "main"` e um comentário.
+- O guia [Atualizar o plugin](docs/guias.md#atualizar-o-plugin) substitui o "Sair da origem privada" e serve a toda subida de versão: troca o marketplace pela `ref` nova, reinstala o plugin, faz o passo de migração do `CHANGELOG.md`, roda o `gerar` e o `gerar --check` e commita. O passo 3 manda fechar as sessões do Claude Code abertas no projeto, porque os hooks delas refazem o link `.claude/harness/nucleo` para o núcleo carregado, o velho; depois, apagar o link e rodar o `gerar` numa sessão nova ou no terminal. O passo 4 tira o `harness.yml` do robô de dependências, com o `exclude-paths` do Dependabot ou, no Renovate, `{ "matchFileNames": [".github/workflows/harness.yml"], "enabled": false }` no `packageRules`. O "Relatar um problema" aponta o guia.
+
+Passo de migração:
+
+1. Atualize o plugin pelo guia [Atualizar o plugin](docs/guias.md#atualizar-o-plugin): feche as sessões do Claude Code do projeto, apague o link `.claude/harness/nucleo` e só então rode o `harness.py gerar`. O núcleo `0.3.1` ainda diz só `reinstale o plugin`, e o link velho o mantém carregado.
+2. No planejamento que roda o CI fora da `main`, ponha `[ci] ramo = "<ramo>"` no `.claude/perfil.toml` antes do `gerar`.
+3. No planejamento com os diagramas num workflow feito à mão, troque-o pelo `diagramas.yml` do guia [Validar os diagramas no CI](docs/guias.md#validar-os-diagramas-no-ci).
+
 ## v0.3.1 — 2026-11-10
 
 Quatro consertos do dia a dia: o despacho em segundo plano termina o turno sem adiantar o resultado, a aceitação separa o item manual do pendente, o STATUS velho passa a ser avisado, e o `checar` recusa a citação por número de linha e avisa o item de Aceite citado que mudou.
@@ -26,7 +45,7 @@ O plugin passa a vir de um repositório público, e o CI dos projetos, a rodar s
 - O `bloco finalizar` avisa, sem recusar, `aviso: [desenvolvimento.ci] instalar está vazio e <nomes> rodam no CI, que começa sem a stack`, quando a lista está vazia e alguma verificação do momento `finalizar` roda um comando que não é do harness.
 - No CI, com `GITHUB_ACTIONS=true`, a verificação que falha lê a saída inteira e, para cada comando não encontrado pelo shell (`sh: <n>: <cmd>: not found` ou `<cmd>: command not found`), diz `<nome>: a saída diz que falta o comando <cmd>; declare a instalação em [desenvolvimento.ci] instalar`. Cada falha, a da instalação do CI inclusive, gera a anotação `::error title=harness: <nome> falhou::<primeira linha>`, que aparece no resumo do PR. Fora do CI, a saída fica como antes.
 
-Passo de migração dos projetos gerados da `v0.2.1` à `v0.2.7`, que baixam o núcleo do `Ela-Decora/ElaHarness` com o segredo `ELA_HARNESS_TOKEN`: o guia [Sair da origem privada](docs/guias.md#sair-da-origem-privada), à mão e uma vez. Ele troca o marketplace pela distribuição e reinstala o plugin, roda o `harness.py gerar`, declara a stack em `[desenvolvimento.ci] instalar` e commita; depois, o segredo pode sair. Quem não migra segue na origem, com o token.
+Passo de migração dos projetos gerados da `v0.2.1` à `v0.2.7`, que baixam o núcleo do `Ela-Decora/ElaHarness` com o segredo `ELA_HARNESS_TOKEN`: o guia [Atualizar o plugin](docs/guias.md#atualizar-o-plugin), à mão e uma vez. Ele troca o marketplace pela distribuição e reinstala o plugin, roda o `harness.py gerar`, declara a stack em `[desenvolvimento.ci] instalar` e commita; depois, o segredo pode sair. Quem não migra segue na origem, com o token.
 
 Aviso: as actions do `harness.yml` vão fixadas por SHA, que sobe com a versão do plugin, e o PR do Dependabot nesse arquivo fica vermelho com `desatualizado: .github/workflows/harness.yml; rode harness.py gerar`. Feche-o, ou tire o arquivo do Dependabot pelo `exclude-paths`, como diz o guia: quem atualiza o `harness.yml` é o `harness.py gerar`.
 

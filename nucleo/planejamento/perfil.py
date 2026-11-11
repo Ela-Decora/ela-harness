@@ -76,6 +76,9 @@ Seções e chaves, todas obrigatórias, menos `[gates]` e as opcionais:
 - `[passagem]`, opcional: `manifesto`, o caminho a partir da raiz que o `passagem publicar` commita; `areas`, uma
   tabela com `documento` (relativo à pasta do planejamento), `secao` (o texto do título, sem os `#`), `coluna_area`
   e `coluna_pastas`. Sem a seção, o `passagem exportar` recusa.
+- `[ci]`, opcional, com chave desconhecida recusada: `ramo`, o ramo em que o `.github/workflows/harness.yml` gerado
+  dispara, no push e no pull request; sem a tabela ou sem a chave, `main`. Com espaço, com `..` ou começando por `-`,
+  é recusado.
 - `[gates.<gate>]`: `marcador_pendencia` e os `[[gates.<gate>.itens]]`, numerados na ordem do arquivo, com `tipo`
   `script` (e `verificacao`, uma das do `harness.py gate`, com os parâmetros como chaves do item), `revisor`,
   `leitor-frio` ou `humano` (e `criterio`); o `leitor-frio` pede `caminhos.leitor_frio`, `[leitor_frio] perguntas`
@@ -317,6 +320,7 @@ class Perfil:
     passagem: SecaoPassagem | None = None
     segredos: tuple[tuple[str, str], ...] = ()
     segredos_isentos: tuple[str, ...] = ()
+    ramo_do_ci: str = "main"
 
     @property
     def comum(self) -> PerfilComum:
@@ -707,13 +711,28 @@ def _passagem(dados: dict) -> SecaoPassagem | None:
     return SecaoPassagem(manifesto, areas)
 
 
+def _ramo_do_ci(dados: dict) -> str:
+    """`[ci]`, opcional: a tabela, a chave desconhecida e o `ramo`, um texto sem espaço, sem `..` e sem `-` no começo.
+    Sem a tabela, ou sem o `ramo` nela, `main`."""
+    if "ci" not in dados:
+        return "main"
+    bruta = _secao(dados, "ci")
+    perfil_comum.sem_desconhecida(bruta, ("ramo",), "ci")
+    if "ramo" not in bruta:
+        return "main"
+    ramo = _texto(bruta, "ramo", "ci")
+    if re.search(r"\s", ramo) or ".." in ramo or ramo.startswith("-"):
+        raise PerfilInvalido(f"ci.ramo fora do formato de branch: {ramo}")
+    return ramo
+
+
 def validar(dados: dict) -> Perfil:
     """Confere o perfil já lido do TOML e devolve o Perfil. Lança PerfilInvalido no primeiro problema.
 
     A parte comum vem primeiro, pelo `perfil_comum`: o `[projeto]` e o `[guarda]`; o perfil de desenvolvimento e o
     de planejamento com a tabela `[desenvolvimento]` são recusados. Depois, as seções do planejamento, na ordem do
     arquivo: caminhos, moldes, fases, ids, texto, der, as regras do `checar` (campos, colunas e pendencia_na_linha),
-    leitor_frio, passagem e gates.
+    leitor_frio, passagem, ci e gates.
     """
     comum_ = perfil_comum.validar(dados)
     if comum_.harness != perfil_comum.PLANEJAMENTO:
@@ -815,12 +834,14 @@ def validar(dados: dict) -> Perfil:
     perguntas = (_textos(_secao(dados, "leitor_frio"), "perguntas", "leitor_frio", vazia=False)
                  if "leitor_frio" in dados else ())
     passagem = _passagem(dados)
+    ramo_do_ci = _ramo_do_ci(dados)
     return Perfil(
         nome, caminhos, moldes, fases, ids, texto,
         _gates(dados, fases, ids, caminhos.leitor_frio, perguntas, passagem is not None), der, comum_.proibidos,
         campos=campos, colunas=colunas, pendencia_na_linha=pendencia_na_linha,
         perguntas_leitor_frio=perguntas, passagem=passagem,
         segredos=comum_.segredos, segredos_isentos=comum_.segredos_isentos,
+        ramo_do_ci=ramo_do_ci,
     )
 
 
