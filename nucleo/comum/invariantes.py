@@ -53,6 +53,11 @@ ele, que a CI usa. Os alterados vêm do git, com 10 s de limite por chamada; o r
 - `so-acrescimos`: falha se uma linha do arquivo de decisões sumiu ou mudou, inclusive por texto acrescentado dentro
   dela, ou se o arquivo foi apagado; o acréscimo no meio passa, e a troca da quebra de linha do Windows não conta.
 - `status-valido`: falha se o STATUS.md da versão nova falta ou não passa na validação do `estado`.
+- `status-pelo-harness`, só com `--indice`, logo depois do `status-valido`: compara o STATUS.md do índice com o hash
+  que o harness grava a cada mudança dele, no arquivo `harness-status` do diretório do git desta cópia. Nunca falha:
+  `status-pelo-harness: OK`, com o STATUS fora dos alterados, acrescentado ou igual ao gravado; senão,
+  `status-pelo-harness: AVISO: <status> do commit não é o que o harness gravou por último nesta cópia; confira com
+  harness.py proximo`.
 - `checar-aprovados`, só com `--indice` e `--base`: falha se um `.md` alterado da pasta do planejamento, `aprovado`
   no backlog da versão nova, falha no `checar`, com o texto e o molde da versão nova.
 - `legenda-em-dia`, só com `--indice` e `--base` e só com `caminhos.legenda` no perfil: gera a legenda com os
@@ -104,7 +109,8 @@ ele, que a CI usa. Os alterados vêm do git, com 10 s de limite por chamada; o r
   primeiros 8.000 bytes. O resumo é `sem-segredos: FALHA: <arquivo>:<linha>: segredo (<nome do padrão>)`, o
   primeiro achado, com `; <n> no total` quando há mais; o `--verbose` lista cada um, e o texto nunca aparece.
 
-Saída: uma linha por conferência, `<nome>: OK` ou `<nome>: FALHA: <resumo>`, como
+Saída: uma linha por conferência, `<nome>: OK`, `<nome>: FALHA: <resumo>` ou, no `status-pelo-harness`,
+`<nome>: AVISO: <resumo>`, que não muda o código de saída, como
 `so-acrescimos: FALHA: linha <n> de <arquivo> tirada ou alterada`. Com `--verbose`, abaixo de cada falha: os arquivos
 dos moldes, os erros do STATUS.md ou `<documento>: <verificações que falharam>`. Sem nenhum commit, as conferências
 que comparam com a base passam. Sai com 1 se alguma falha, e também com `erro: fora de um repositório git`,
@@ -114,6 +120,7 @@ que comparam com a base passam. Sai com 1 se alguma falha, e também com `erro: 
 MOLDES_INTOCADOS = "moldes-intocados"
 SO_ACRESCIMOS = "so-acrescimos"
 STATUS_VALIDO = "status-valido"
+STATUS_PELO_HARNESS = "status-pelo-harness"
 CHECAR_APROVADOS = "checar-aprovados"
 LEGENDA_EM_DIA = "legenda-em-dia"
 PASSAGEM_EM_DIA = "passagem-em-dia"
@@ -416,6 +423,26 @@ def _status_valido(git: _Git, perfil: Perfil) -> Conferencia:
     return _ok(STATUS_VALIDO)
 
 
+def _status_pelo_harness(git: _Git, alterados: list[str], perfil: Perfil) -> Conferencia:
+    """Avisa, sem falhar, o STATUS do índice que difere do hash que o harness gravou por último nesta cópia."""
+    status = perfil.caminhos.status
+    if not git.tem_base or status not in alterados or git.da_base(status) is None:
+        return _ok(STATUS_PELO_HARNESS)
+    dados = git.dados_novos(status)
+    if dados is None:
+        return _ok(STATUS_PELO_HARNESS)
+    pasta = comum.diretorio_do_git(git.raiz)
+    try:
+        gravado = None if pasta is None else comum.ler_texto(pasta / estado.ARQUIVO_DA_GRAVACAO).strip()
+    except (OSError, UnicodeDecodeError):
+        gravado = None
+    if gravado == estado.hash_do_status(dados):
+        return _ok(STATUS_PELO_HARNESS)
+    resumo = (f"{STATUS_PELO_HARNESS}: AVISO: {status} do commit não é o que o harness gravou por último nesta cópia; "
+              "confira com harness.py proximo")
+    return Conferencia(STATUS_PELO_HARNESS, True, resumo)
+
+
 def _checar_aprovados(git: _Git, alterados: list[str], perfil: Perfil) -> Conferencia:
     """`checar` de cada `.md` alterado sob o planejamento, fora dos moldes, com status aprovado no backlog novo."""
     if not git.tem_base:
@@ -659,7 +686,8 @@ def conferir(
     executar=subprocess.run,
 ) -> list[Conferencia]:
     """As conferências da trilha do perfil. Com o perfil de planejamento, na ordem `moldes-intocados`,
-    `so-acrescimos`, `status-valido` e, fora do modo `arvore`, `checar-aprovados`, com `caminhos.legenda` no perfil,
+    `so-acrescimos`, `status-valido`, no modo `indice`, `status-pelo-harness` e, fora do modo `arvore`,
+    `checar-aprovados`, com `caminhos.legenda` no perfil,
     `legenda-em-dia` e, com a linha do gerado no `CLAUDE.md` da versão nova, `gerados-em-dia`; por último, nas duas
     trilhas, o `sem-segredos`. Com o perfil de desenvolvimento, antes dele, o
     `arquivos-do-harness` no modo `arvore` e, nos outros, o `passagem-em-dia` e o `gerados-em-dia`; só com a parte
@@ -681,6 +709,8 @@ def conferir(
             _so_acrescimos(git, do_planejamento, perfil),
             _status_valido(git, perfil),
         ]
+        if modo == INDICE:
+            conferencias.insert(3, _status_pelo_harness(git, do_planejamento, perfil))
         if modo != ARVORE:
             conferencias.append(_checar_aprovados(git, do_planejamento, perfil))
             if perfil.caminhos.legenda:

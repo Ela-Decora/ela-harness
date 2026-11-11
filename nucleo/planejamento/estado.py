@@ -5,6 +5,7 @@ Os gates, as fases e a pasta do planejamento vêm do perfil do projeto (spec 2a,
 from __future__ import annotations
 
 import datetime
+import hashlib
 import re
 import subprocess
 from pathlib import Path
@@ -13,6 +14,8 @@ import backlog
 import comum
 import estudos
 from perfil import Perfil
+
+ARQUIVO_DA_GRAVACAO = "harness-status"
 
 AJUDA = """\
 Valida e imprime o STATUS.md, o estado curto do planejamento (`caminhos.status`), e muda um campo dele por vez.
@@ -62,6 +65,9 @@ com cada mudança automática numa linha a mais. Recusa sai com 1 e `recusado: <
 - Estrutura quebrada (título, campo ausente, repetido ou fora de ordem, linha dos gates) é recusada com
   `corrija à mão`: quem corrige é uma pessoa, porque o modelo não edita o arquivo.
 - Cada `set` regrava o arquivo inteiro: encadeie vários com `&&`, nunca em chamadas paralelas.
+- Cada gravação do STATUS.md pelo harness (`estado set`, `passo`, `versao` e `fechar`) grava também o
+  `sha256:<hash>` do texto gravado no arquivo `harness-status` do diretório do git da cópia, que o
+  `status-pelo-harness` do pre-commit compara; a falha nessa gravação não muda o resultado do comando.
 
 Com `--hook`, imprime numa linha o JSON do início da sessão e sai sempre com 0; o `source` do payload no stdin diz de
 onde a sessão vem. O `systemMessage` é o aviso ao usuário, no formato do molde "Linha do início da sessão" do
@@ -556,7 +562,35 @@ def definir_varios(caminho: Path, mudancas: dict[str, str], perfil: Perfil, hoje
         comum.escrever_texto(caminho, novo_texto)
     except OSError as erro:
         raise EstadoInvalido(f"não foi possível gravar: {caminho} ({_motivo_do_sistema(erro)})") from None
+    _gravar_hash_do_status(caminho, novo_texto, perfil)
     return automaticas
+
+
+def hash_do_status(dados: bytes) -> str:
+    """`sha256:` mais os 64 hexadecimais do SHA-256 dos bytes, com `\\r\\n` contado como `\\n`, como no `hash_do_molde`."""
+    return "sha256:" + hashlib.sha256(dados.replace(b"\r\n", b"\n")).hexdigest()
+
+
+def _raiz_do_status(caminho: Path, perfil: Perfil) -> Path | None:
+    """A raiz da cópia: o caminho do STATUS sem as partes de `perfil.caminhos.status`; None se ele não termina nelas."""
+    partes = Path(perfil.caminhos.status).parts
+    caminho = Path(caminho)
+    if not partes or len(caminho.parts) <= len(partes) or caminho.parts[-len(partes):] != partes:
+        return None
+    return Path(*caminho.parts[: -len(partes)])
+
+
+def _gravar_hash_do_status(caminho: Path, texto: str, perfil: Perfil) -> None:
+    """Grava o hash do texto em `<diretório do git>/harness-status`, só se a raiz e o diretório existem; o erro do
+    sistema não sobe."""
+    raiz = _raiz_do_status(caminho, perfil)
+    pasta = None if raiz is None else comum.diretorio_do_git(raiz)
+    if pasta is None or not pasta.is_dir():
+        return
+    try:
+        comum.escrever_texto(pasta / ARQUIVO_DA_GRAVACAO, hash_do_status(texto.encode("utf-8")) + "\n")
+    except OSError:
+        pass
 
 
 def definir(caminho: Path, campo: str, valor: str, perfil: Perfil, hoje: str | None = None) -> dict[str, str]:

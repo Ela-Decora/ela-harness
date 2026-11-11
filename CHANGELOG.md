@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.3.1 — 2026-11-10
+
+Quatro consertos do dia a dia: o despacho em segundo plano termina o turno sem adiantar o resultado, a aceitação separa o item manual do pendente, o STATUS velho passa a ser avisado, e o `checar` recusa a citação por número de linha e avisa o item de Aceite citado que mudou.
+
+### O que mudou desde a 0.3.0
+
+- Os despachos em segundo plano terminam o turno. O revisor do `/ela-harness:refinar-documento` fecha a mensagem com `Revisor em segundo plano (rodada <n>); o relato vem quando ele voltar.`, o do `/ela-harness:gate-fase`, com `Revisor do gate em segundo plano; o checklist vem quando ele voltar.`, e, até a notificação do agente, nenhuma mensagem traz veredito, achado ou palpite; se o usuário pede antes, a resposta é que o revisor ainda não voltou. Os despachos do SDD no `/ela-harness:executar-bloco` ganham a regra **Espera**: o despacho que volta sem o resultado termina o turno, e nada que dependa dele sai antes da notificação.
+- O `harness.py aceitacao conferir` dá `ACEITACAO MANUAL: <k> de <n> item(ns): <números>` quando todo item pendente de antes do merge é manual e ainda sem resultado, e sai com 1, como no `ACEITACAO PENDENTE`. A `/ela-harness:finalizar-bloco` segue pela última linha: `ACEITACAO OK`, o passo 3; `ACEITACAO MANUAL`, o passo 2, do item manual, um por vez, até o `aceitacao anotar` dar `ACEITACAO OK`; outra linha, o dono.
+- O `proximo` avisa o STATUS velho: com o documento ou o pacote do STATUS, nos passos 0 a 6, todo `aprovado` no backlog e sem pendência aberta que o cite, o recomendado é `consertar: perguntar ao usuário se o STATUS está velho`, com a volta no motivo, e o início da sessão mostra o mesmo. No modo revisão do `/ela-harness:refinar-documento`, o pedido do usuário sem pendência aberta que cite o documento vira pendência no passo 0, pelo `harness.py registrar pendencia`, e entra no escopo.
+- O harness grava o hash do STATUS a cada mudança dele, no arquivo `harness-status` do diretório do git da cópia, e o pre-commit do planejamento ganha a `status-pelo-harness`, que nunca falha: `status-pelo-harness: AVISO: <status> do commit não é o que o harness gravou por último nesta cópia; confira com harness.py proximo`, quando o STATUS do commit não é o que o harness gravou.
+- O `harness.py checar` ganha duas verificações, logo depois do `links`. A `citacao-por-linha` recusa o trecho `<caminho>.md:<n>` ou `<caminho>.md:<n>-<m>` fora dos blocos de código, com o detalhe `L<linha>: <citação> cita por número de linha; cite o ID ou o título da seção`; o arquivo de decisões fica de fora, porque só recebe acréscimos, e o negrito e o itálico em volta da citação ficam fora do caminho. A `aceite-renumerado`, que nunca falha, compara cada `<ID>.<n>` que outro documento aprovado cita com o item do documento no HEAD e avisa `L<linha>: <ID>.<n>, citado em <documentos>, virou <ID>.<m> desde o HEAD` ou `[...] mudou ou saiu desde o HEAD`. A redação do `/ela-harness:refinar-documento` cita pelo ID ou pelo título da seção e mantém o número do item de Aceite citado: o item novo entra no fim, e a mudança de propósito leva a correção ao documento que cita.
+
+Passo de migração: o planejamento não roda comando. O gate pode falhar na `citacao-por-linha` de um documento aprovado; a citação se troca pelo ID ou pelo título da seção na revisão dele. O primeiro commit que muda o STATUS depois de atualizar pode dar o aviso da `status-pelo-harness` uma vez, até o harness gravar o hash. O desenvolvimento não muda nada.
+
 ## v0.3.0 — 2026-11-10
 
 O plugin passa a vir de um repositório público, e o CI dos projetos, a rodar sem credencial: o `harness.yml` vira arquivo gerado, a stack do projeto se instala no CI pelo perfil, e o harness avisa e explica a ferramenta que falta.

@@ -1,6 +1,6 @@
 {
   "name": "ela-harness",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Harness do Claude Code em duas trilhas: planejamento, que conduz documentos do rascunho à aprovação em camadas com gates, e desenvolvimento, que conduz blocos de código por lanes, revisões e passagem, com perfil por projeto.",
   "author": {
     "name": "Ela Decora"

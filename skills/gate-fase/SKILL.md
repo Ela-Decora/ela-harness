@@ -42,7 +42,7 @@ Cada `errada` ou `não achou` confirmado é lacuna. Se o conteúdo falta no plan
 
 Se algum item de script deu FAIL sem dispensa do usuário, ou o do leitor frio deu FAIL, não despache o revisor: monte o checklist do passo 3 só com esses itens, diga o que falta, peça a correção, ou "dispenso o N: motivo" para cada um de script, e pare. A dispensa dada aqui vale no passo 4.
 
-Senão (o leitor frio em PASS e nenhum FAIL de script, ou todos os de script dispensados), compare a linha `Assinatura:` da saída do passo 1 com a do último veredito do `revisor-gate` nesta conversa. Igual: reaproveite aquele veredito, sem despacho, e diga isso em uma linha. Diferente, ou sem veredito nesta conversa (sessão nova ou depois de `/clear`): despache o agente `ela-harness:revisor-gate` em segundo plano e avise o usuário em uma linha. No despacho, só caminhos e textos curtos:
+Senão (o leitor frio em PASS e nenhum FAIL de script, ou todos os de script dispensados), compare a linha `Assinatura:` da saída do passo 1 com a do último veredito do `revisor-gate` nesta conversa. Igual: reaproveite aquele veredito, sem despacho, e diga isso em uma linha. Diferente, ou sem veredito nesta conversa (sessão nova ou depois de `/clear`): despache o agente `ela-harness:revisor-gate` em segundo plano e termine a mensagem com a linha `Revisor do gate em segundo plano; o checklist vem quando ele voltar.`, e o turno nela. Até a notificação do agente, nenhuma mensagem traz veredito, item ou palpite do que ele vai achar; se o usuário pedir antes, diga que o revisor ainda não voltou. No despacho, só caminhos e textos curtos:
 
 ```
 Gate: {gate}

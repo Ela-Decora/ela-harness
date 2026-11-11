@@ -130,6 +130,9 @@ com cada mudança automática numa linha a mais. Recusa sai com 1 e `recusado: <
 - Estrutura quebrada (título, campo ausente, repetido ou fora de ordem, linha dos gates) é recusada com
   `corrija à mão`: quem corrige é uma pessoa, porque o modelo não edita o arquivo.
 - Cada `set` regrava o arquivo inteiro: encadeie vários com `&&`, nunca em chamadas paralelas.
+- Cada gravação do STATUS.md pelo harness (`estado set`, `passo`, `versao` e `fechar`) grava também o
+  `sha256:<hash>` do texto gravado no arquivo `harness-status` do diretório do git da cópia, que o
+  `status-pelo-harness` do pre-commit compara; a falha nessa gravação não muda o resultado do comando.
 
 Com `--hook`, imprime numa linha o JSON do início da sessão e sai sempre com 0; o `source` do payload no stdin diz de
 onde a sessão vem. O `systemMessage` é o aviso ao usuário, no formato do molde "Linha do início da sessão" do
@@ -237,7 +240,7 @@ confere documentos de planejamento contra o molde
 | `--verbose` | não | mostra o detalhe de cada verificação |
 
 Confere cada documento contra o molde dele, em seis verificações e nas regras do perfil que casam com ele, e sai com 1
-se alguma falha, menos `a-confirmar`.
+se alguma falha, menos `a-confirmar` e `aceite-renumerado`.
 
 Sem argumento, confere os documentos em refino do STATUS.md, o `Pacote` ou o `Documento`; sem nenhum, sai com 1 e
 `sem documento: passe o caminho ou abra um no STATUS.md`, e com o STATUS.md inválido, `STATUS.md inválido: <motivo>`.
@@ -304,6 +307,20 @@ fase do `[der]`, ele vem entre o `c4` e o `drawio`. O pre-commit não o roda.
   Detalhe, com o destino como está escrito, sem os `<>`: `L<linha>: link <destino> não resolve`,
   `L<linha>: link <destino> excluído da passagem (<chave>)`, com a chave ou `.claude`, e
   `L<linha>: link <destino> é uma pasta; linke um arquivo`.
+
+Logo depois do `links`, nos mesmos documentos, vêm as verificações das citações; na fase do `[der]`, elas ficam
+entre o `links` e o `drawio`. O pre-commit não as roda.
+
+- `citacao-por-linha`: trecho `<caminho>.md:<n>` ou `<caminho>.md:<n>-<m>` fora dos blocos de código, dentro ou fora
+  do código em linha, com o `<caminho>` feito de letras, algarismos, `.`, `_`, `-`, `*` e `/`. Fica de fora o
+  `caminhos.decisoes`, ou a parte final dele depois de uma `/`: o arquivo só recebe acréscimos, e as linhas dele não
+  andam. Detalhe: `L<linha>: <citação> cita por número de linha; cite o ID ou o título da seção`.
+- `aceite-renumerado`, que nunca falha: para cada `<ID>.<n>` que outro documento `aprovado` das pastas de fase cita,
+  sozinho ou numa faixa `<ID>.<n> a <ID>.<m>`, compara o item `<n>` da seção `### <palavra> <ID>: <nome>` com o do
+  documento no HEAD; o item é a posição na primeira lista numerada da seção. Linha: `aceite-renumerado: OK` ou
+  `aceite-renumerado: AVISO: <n> ocorrências, primeira em L<linha>`. Detalhe:
+  `L<linha>: <ID>.<n>, citado em <documentos>, virou <ID>.<m> desde o HEAD` ou
+  `L<linha>: <ID>.<n>, citado em <documentos>, mudou ou saiu desde o HEAD`. Sem o documento no HEAD, passa.
 
 Com a seção `[der]` no perfil, os documentos da fase que contém o `[der].documento` ganham quatro verificações
 extras, depois das seis e das regras do perfil; o pre-commit não as roda:
@@ -1242,6 +1259,11 @@ ele, que a CI usa. Os alterados vêm do git, com 10 s de limite por chamada; o r
 - `so-acrescimos`: falha se uma linha do arquivo de decisões sumiu ou mudou, inclusive por texto acrescentado dentro
   dela, ou se o arquivo foi apagado; o acréscimo no meio passa, e a troca da quebra de linha do Windows não conta.
 - `status-valido`: falha se o STATUS.md da versão nova falta ou não passa na validação do `estado`.
+- `status-pelo-harness`, só com `--indice`, logo depois do `status-valido`: compara o STATUS.md do índice com o hash
+  que o harness grava a cada mudança dele, no arquivo `harness-status` do diretório do git desta cópia. Nunca falha:
+  `status-pelo-harness: OK`, com o STATUS fora dos alterados, acrescentado ou igual ao gravado; senão,
+  `status-pelo-harness: AVISO: <status> do commit não é o que o harness gravou por último nesta cópia; confira com
+  harness.py proximo`.
 - `checar-aprovados`, só com `--indice` e `--base`: falha se um `.md` alterado da pasta do planejamento, `aprovado`
   no backlog da versão nova, falha no `checar`, com o texto e o molde da versão nova.
 - `legenda-em-dia`, só com `--indice` e `--base` e só com `caminhos.legenda` no perfil: gera a legenda com os
@@ -1293,7 +1315,8 @@ ele, que a CI usa. Os alterados vêm do git, com 10 s de limite por chamada; o r
   primeiros 8.000 bytes. O resumo é `sem-segredos: FALHA: <arquivo>:<linha>: segredo (<nome do padrão>)`, o
   primeiro achado, com `; <n> no total` quando há mais; o `--verbose` lista cada um, e o texto nunca aparece.
 
-Saída: uma linha por conferência, `<nome>: OK` ou `<nome>: FALHA: <resumo>`, como
+Saída: uma linha por conferência, `<nome>: OK`, `<nome>: FALHA: <resumo>` ou, no `status-pelo-harness`,
+`<nome>: AVISO: <resumo>`, que não muda o código de saída, como
 `so-acrescimos: FALHA: linha <n> de <arquivo> tirada ou alterada`. Com `--verbose`, abaixo de cada falha: os arquivos
 dos moldes, os erros do STATUS.md ou `<documento>: <verificações que falharam>`. Sem nenhum commit, as conferências
 que comparam com a base passam. Sai com 1 se alguma falha, e também com `erro: fora de um repositório git`,
@@ -1314,8 +1337,9 @@ Diz o próximo passo do planejamento, pelo STATUS.md, pela tabela de artefatos, 
 Só lê; a rede só para o retorno, e o hook nunca consulta. A ação recomendada é a primeira que existir, nesta ordem:
 
 1. consertar: no passo 7 com a versão marcada já no HEAD, `harness.py fechar`; nos passos 6 e 7 com o documento
-   mudado desde a marcação, `harness.py versao conferir`; o documento em refino ausente do disco. Num worktree, a
-   ação ganha `(na árvore principal)`.
+   mudado desde a marcação, `harness.py versao conferir`; o documento em refino ausente do disco; o documento ou o
+   pacote do STATUS, nos passos 0 a 6, todo `aprovado` na tabela e sem pendência aberta que o cite: `perguntar ao
+   usuário se o STATUS está velho`, com a volta no motivo. Num worktree, a ação ganha `(na árvore principal)`.
 2. o documento ou o pacote em andamento: `/ela-harness:refinar-documento <documento>`, que retoma do passo atual,
    ou, no passo 7, o commit e o `harness.py fechar`; com "quando o usuário liberar" no `Proximo`, perguntar se o
    usuário libera o commit.
@@ -2071,9 +2095,10 @@ Confere e anota a aceitação do bloco da lane, no `aceitacao.md` da pasta do bl
   de prova automática e o de depois do merge, que se anota no `harness.py lane fechar --manual`.
 
 A saída traz uma linha `<n> <prova>: <resultado>` por item do momento e o veredito na última:
-`ACEITACAO OK: <n> item(ns)` ou `ACEITACAO PENDENTE: <k> de <n> item(ns): <números>`. Os manuais de antes contam pelo
-Resultado gravado, e o `—` é pendente; no `--depois`, os manuais contam como pendentes. O `conferir` sai com 0 no OK e
-com 1 no PENDENTE; o `anotar` imprime o item anotado e o veredito de antes e sai com 0.
+`ACEITACAO OK: <n> item(ns)`; `ACEITACAO MANUAL: <k> de <n> item(ns): <números>`, quando todo item pendente de antes
+do merge é manual e ainda sem resultado; ou `ACEITACAO PENDENTE: <k> de <n> item(ns): <números>`. Os manuais de antes
+contam pelo Resultado gravado, e o `—` é pendente; no `--depois`, os manuais contam como pendentes. O `conferir` sai
+com 0 no OK e com 1 no MANUAL e no PENDENTE; o `anotar` imprime o item anotado e o veredito de antes e sai com 0.
 
 Fora de lane, a recusa é `fora de lane: rode dentro da lane do bloco`; sem o arquivo,
 `<blocos>/<pasta>/aceitacao.md não existe; o bloco planejado o gera`; com um alias que saiu do perfil depois da
@@ -2983,6 +3008,7 @@ refaz o espelho das fichas no Linear, sem duplicar nada
 | `nucleo/planejamento/backlog.py` | Backlog do planejamento: IDs e contagem das pendências (spec 5.2 e 6.4), pendências e artefatos do gate (spec 2a, §6.1). |
 | `nucleo/planejamento/blocos.py` | Textos tirados do perfil: o resumo do comando `perfil` e o bloco "Este projeto" de cada skill (spec 2a, §5.3 e §5.5). |
 | `nucleo/planejamento/checar.py` | Checagem determinística de um documento de planejamento contra o molde: o passo 4 do ciclo (spec 6.2). |
+| `nucleo/planejamento/citacoes.py` | As verificações das citações de um documento da camada: a citação por número de linha e o item de Aceite que mudou. |
 | `nucleo/planejamento/der.py` | O DER físico em tabelas Markdown, o gerador do DDL e do erDiagram, o rastreio contra a camada 2 e o manifesto do Workbench. |
 | `nucleo/planejamento/diagramas.py` | As checagens dos diagramas da camada, em Mermaid, C4 e `.drawio`, sem rodar o Mermaid. |
 | `nucleo/planejamento/dossie.py` | Dossiê de um documento ou de um pacote (spec 4b, §7): as fontes de cada documento, achadas por script, sem LLM e sem rede. |

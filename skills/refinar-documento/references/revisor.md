@@ -8,7 +8,7 @@ O arquivo de princípios sai do título de nível 1 do molde: `# Entidade:` dá 
 - Rodada 2: só se a correção da rodada 1 reescreveu uma seção ou acrescentou ID ou regra; ajuste de redação não conta. Mesmo modelo, bloco "Rodada 2", com os achados anteriores e o `Escopo:` dos trechos alterados.
 - Não há rodada 3: o que sobrar vai ao usuário no passo 6.
 
-Despache sempre em segundo plano e avise o usuário em uma linha. Enquanto o revisor roda, faça o que não depende do veredito e não edite o documento revisado. Ao fim de cada rodada, registre os tokens e a duração lidos da notificação do agente por `harness.py registrar medicao "<medição>" "<valor>"`.
+Despache sempre em segundo plano. A mensagem do despacho termina com a linha `Revisor em segundo plano (rodada <n>); o relato vem quando ele voltar.`, e o turno acaba nela. Até a notificação do agente, nenhuma mensagem traz veredito, achado ou palpite do que ele vai achar; se o usuário pedir o resultado antes, diga que o revisor ainda não voltou. Enquanto ele roda, faça só o que não depende do veredito, sem editar o documento revisado. Ao fim de cada rodada, registre os tokens e a duração lidos da notificação do agente por `harness.py registrar medicao "<medição>" "<valor>"`.
 
 Cada achado é hipótese: confira no documento antes de aplicar e discorde com motivo quando ele contrariar decisão do usuário registrada. Relate cada rodada no molde "Relato da revisão" de `.claude/harness/nucleo/nucleo/comum/saida.md`, lido na hora. Correção aplicada: o `checar` roda de novo (item 1 do passo 4), sem mudar o `STATUS.md`; a confirmação só se repete para marcador novo. Rodada 2 nova: `harness.py passo 5 --rodada 2 --proximo "<o que vem>"`. Ao fechar o passo, `harness.py passo 6`, como [aprovacao.md](aprovacao.md) diz.
 

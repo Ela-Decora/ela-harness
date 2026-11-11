@@ -6,6 +6,7 @@ as regras do perfil (`[[campos]]`, `[[colunas]]` e `[[pendencia_na_linha]]`) acr
 from __future__ import annotations
 
 import re
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -20,7 +21,7 @@ from perfil import Fase, Perfil
 
 AJUDA = """\
 Confere cada documento contra o molde dele, em seis verificações e nas regras do perfil que casam com ele, e sai com 1
-se alguma falha, menos `a-confirmar`.
+se alguma falha, menos `a-confirmar` e `aceite-renumerado`.
 
 Sem argumento, confere os documentos em refino do STATUS.md, o `Pacote` ou o `Documento`; sem nenhum, sai com 1 e
 `sem documento: passe o caminho ou abra um no STATUS.md`, e com o STATUS.md inválido, `STATUS.md inválido: <motivo>`.
@@ -88,6 +89,20 @@ fase do `[der]`, ele vem entre o `c4` e o `drawio`. O pre-commit não o roda.
   `L<linha>: link <destino> excluído da passagem (<chave>)`, com a chave ou `.claude`, e
   `L<linha>: link <destino> é uma pasta; linke um arquivo`.
 
+Logo depois do `links`, nos mesmos documentos, vêm as verificações das citações; na fase do `[der]`, elas ficam
+entre o `links` e o `drawio`. O pre-commit não as roda.
+
+- `citacao-por-linha`: trecho `<caminho>.md:<n>` ou `<caminho>.md:<n>-<m>` fora dos blocos de código, dentro ou fora
+  do código em linha, com o `<caminho>` feito de letras, algarismos, `.`, `_`, `-`, `*` e `/`. Fica de fora o
+  `caminhos.decisoes`, ou a parte final dele depois de uma `/`: o arquivo só recebe acréscimos, e as linhas dele não
+  andam. Detalhe: `L<linha>: <citação> cita por número de linha; cite o ID ou o título da seção`.
+- `aceite-renumerado`, que nunca falha: para cada `<ID>.<n>` que outro documento `aprovado` das pastas de fase cita,
+  sozinho ou numa faixa `<ID>.<n> a <ID>.<m>`, compara o item `<n>` da seção `### <palavra> <ID>: <nome>` com o do
+  documento no HEAD; o item é a posição na primeira lista numerada da seção. Linha: `aceite-renumerado: OK` ou
+  `aceite-renumerado: AVISO: <n> ocorrências, primeira em L<linha>`. Detalhe:
+  `L<linha>: <ID>.<n>, citado em <documentos>, virou <ID>.<m> desde o HEAD` ou
+  `L<linha>: <ID>.<n>, citado em <documentos>, mudou ou saiu desde o HEAD`. Sem o documento no HEAD, passa.
+
 Com a seção `[der]` no perfil, os documentos da fase que contém o `[der].documento` ganham quatro verificações
 extras, depois das seis e das regras do perfil; o pre-commit não as roda:
 
@@ -153,6 +168,8 @@ CAMPOS = "campos"
 COLUNAS = "colunas"
 PENDENCIA_NA_LINHA = "pendencia-na-linha"
 SOBRAS = "sobras-de-molde"
+CITACAO_POR_LINHA = "citacao-por-linha"
+ACEITE_RENUMERADO = "aceite-renumerado"
 
 MARCADOR_A_CONFIRMAR = "[A CONFIRMAR"
 SEM_TITULO = "sem título"
@@ -689,7 +706,7 @@ def _ler(raiz: Path, caminho: Path, rotulo: str) -> str:
         raise EntradaInvalida(f"{rotulo} ilegível: {mostrar(raiz, caminho)} ({motivo})") from None
 
 
-def checar_arquivo(raiz: Path, documento: Path, perfil: Perfil) -> list[Resultado]:
+def checar_arquivo(raiz: Path, documento: Path, perfil: Perfil, executar=subprocess.run) -> list[Resultado]:
     """O que o subcomando `checar` faz: acha o molde do documento, lê os dois e confere.
 
     O documento é relativo à raiz do projeto (não ao diretório corrente) ou absoluto. Entrada que não serve
@@ -710,7 +727,7 @@ def checar_arquivo(raiz: Path, documento: Path, perfil: Perfil) -> list[Resultad
         except backlog.BacklogIlegivel as erro:
             erro_backlog = erro.mensagem
     resultados = checar_versao(raiz, relativo, texto_documento, texto_molde, texto_backlog, perfil, erro_backlog)
-    return resultados + _da_camada(raiz, relativo, texto_documento, texto_molde, perfil)
+    return resultados + _da_camada(raiz, relativo, texto_documento, texto_molde, texto_backlog, perfil, executar)
 
 
 _RE_ITEM_VAZIO = re.compile(r"\s*(?:[-*+]|\d+[.)])\s*")
@@ -760,20 +777,26 @@ def sobras_de_molde(texto: str, molde: str) -> Resultado:
     return de_ocorrencias(SOBRAS, [(numero, f"{sobra}; preencha ou apague") for numero, sobra in sorted(ocorrencias)])
 
 
-def _da_camada(raiz: Path, relativo: str, texto: str, molde: str, perfil: Perfil) -> list[Resultado]:
+def _da_camada(raiz: Path, relativo: str, texto: str, molde: str, texto_backlog: str | None, perfil: Perfil,
+               executar) -> list[Resultado]:
     """As verificações depois das regras do perfil. Fora das pastas das fases, nenhuma. Na fase que contém o documento
-    de `[der]`: `sobras-de-molde`, `mermaid`, `c4`, `links` e `drawio` em todo documento dela e, no próprio documento
-    de `[der]`, as do DER. Nas outras fases, ou sem `[der]`, só o `links`."""
+    de `[der]`: `sobras-de-molde`, `mermaid`, `c4`, `links`, as das citações e `drawio` em todo documento dela e, no
+    próprio documento de `[der]`, as do DER. Nas outras fases, ou sem `[der]`, só o `links` e as das citações."""
     fase_do_documento = perfil.fase_do_documento(relativo)
     if fase_do_documento is None:
         return []
     import der  # o der e o diagramas importam o checar
+    import citacoes
     import diagramas
 
     documento_do_der = der.documento_do_perfil(perfil) if perfil.der is not None else None
     if documento_do_der is None or perfil.fase_do_documento(documento_do_der) != fase_do_documento:
-        return [de_ocorrencias("links", diagramas.conferir_links(raiz, relativo, texto, perfil))]
+        return [de_ocorrencias("links", diagramas.conferir_links(raiz, relativo, texto, perfil)),
+                *citacoes.verificacoes(raiz, relativo, texto, texto_backlog, perfil, executar)]
     resultados = [sobras_de_molde(texto, molde), *diagramas.verificacoes(raiz, perfil, relativo, texto)]
+    # as da citação entram logo depois do `links`, antes do `drawio`
+    posicao = next(i for i, resultado in enumerate(resultados) if resultado.nome == "links") + 1
+    resultados[posicao:posicao] = citacoes.verificacoes(raiz, relativo, texto, texto_backlog, perfil, executar)
     if relativo == documento_do_der:
         resultados += der.verificacoes(raiz, perfil, relativo, texto)
     return resultados
@@ -930,11 +953,12 @@ def checar_versao(
 def _resumo(resultado: Resultado) -> str:
     if resultado.nome == A_CONFIRMAR:
         return f"{resultado.nome}: {resultado.ocorrencias}"
-    if resultado.ok:
+    aviso = resultado.nome == ACEITE_RENUMERADO and resultado.ocorrencias > 0
+    if resultado.ok and not aviso:
         return f"{resultado.nome}: OK"
     plural = "ocorrência" if resultado.ocorrencias == 1 else "ocorrências"
     primeira = f", primeira em L{resultado.primeira_linha}" if resultado.primeira_linha is not None else ""
-    return f"{resultado.nome}: FALHA: {resultado.ocorrencias} {plural}{primeira}"
+    return f"{resultado.nome}: {'AVISO' if aviso else 'FALHA'}: {resultado.ocorrencias} {plural}{primeira}"
 
 
 def formatar_resultados(resultados: list[Resultado], verbose: bool) -> str:

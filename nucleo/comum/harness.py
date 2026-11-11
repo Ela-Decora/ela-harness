@@ -726,7 +726,7 @@ def _aceitacao_da_lane() -> tuple[Path, perfil_desenvolvimento.PerfilDesenvolvim
 
 def _comando_aceitacao_conferir(args: argparse.Namespace) -> int:
     """Confere as provas automáticas do momento (spec 6c, §12.3), com o pedido da spec aprovada e as variáveis da lane
-    (spec prova-por-post, §7); sem `--depois`, grava o resultado e faz o commit. Sai com 1 no PENDENTE."""
+    (spec prova-por-post, §7); sem `--depois`, grava o resultado e faz o commit. Sai com 1 no MANUAL e no PENDENTE."""
     raiz, perfil, lane, relativo, tabela = _aceitacao_da_lane()
     pedidos, variaveis = {}, {}
     if aceitacao.precisa_da_spec(tabela, args.depois):

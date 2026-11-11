@@ -270,7 +270,7 @@ origem privada, que o CI baixa com o segredo `ELA_HARNESS_TOKEN`. É à mão, um
    desinstala os plugins e tira as entradas do `enabledPlugins`; os `install` as devolvem, o último só no desenvolvimento.
    ```bash
    claude plugin marketplace remove ela-harness --scope project
-   claude plugin marketplace add Ela-Decora/ela-harness#v0.3.0 --scope project
+   claude plugin marketplace add Ela-Decora/ela-harness#v0.3.1 --scope project
    claude plugin install ela-harness@ela-harness --scope project
    claude plugin install ela-harness-papeis@ela-harness --scope project
    ```

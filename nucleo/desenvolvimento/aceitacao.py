@@ -76,9 +76,10 @@ Confere e anota a aceitação do bloco da lane, no `aceitacao.md` da pasta do bl
   de prova automática e o de depois do merge, que se anota no `harness.py lane fechar --manual`.
 
 A saída traz uma linha `<n> <prova>: <resultado>` por item do momento e o veredito na última:
-`ACEITACAO OK: <n> item(ns)` ou `ACEITACAO PENDENTE: <k> de <n> item(ns): <números>`. Os manuais de antes contam pelo
-Resultado gravado, e o `—` é pendente; no `--depois`, os manuais contam como pendentes. O `conferir` sai com 0 no OK e
-com 1 no PENDENTE; o `anotar` imprime o item anotado e o veredito de antes e sai com 0.
+`ACEITACAO OK: <n> item(ns)`; `ACEITACAO MANUAL: <k> de <n> item(ns): <números>`, quando todo item pendente de antes
+do merge é manual e ainda sem resultado; ou `ACEITACAO PENDENTE: <k> de <n> item(ns): <números>`. Os manuais de antes
+contam pelo Resultado gravado, e o `—` é pendente; no `--depois`, os manuais contam como pendentes. O `conferir` sai
+com 0 no OK e com 1 no MANUAL e no PENDENTE; o `anotar` imprime o item anotado e o veredito de antes e sai com 0.
 
 Fora de lane, a recusa é `fora de lane: rode dentro da lane do bloco`; sem o arquivo,
 `<blocos>/<pasta>/aceitacao.md não existe; o bloco planejado o gera`; com um alias que saiu do perfil depois da
@@ -562,9 +563,16 @@ def pendentes(tabela: Tabela, depois: bool) -> list[int]:
 
 
 def veredito(tabela: Tabela, depois: bool) -> str:
-    """O veredito sobre os itens do momento, pelos `pendentes`."""
+    """O veredito sobre os itens do momento, pelos `pendentes`. Antes do merge, o `ACEITACAO MANUAL` vale quando todo
+    pendente é manual e ainda sem resultado."""
     momento = DEPOIS if depois else ANTES
-    return _veredito([item for item in tabela.itens if item.quando == momento], pendentes(tabela, depois))
+    itens = [item for item in tabela.itens if item.quando == momento]
+    abertos = pendentes(tabela, depois)
+    so_manual = not depois and abertos and all(
+        item.prova == MANUAL and item.resultado == SEM for item in itens if item.numero in abertos)
+    if so_manual:
+        return f"ACEITACAO MANUAL: {len(abertos)} de {len(itens)} item(ns): {', '.join(str(n) for n in abertos)}"
+    return _veredito(itens, abertos)
 
 
 def _veredito(itens: list[Item], pendentes_: list[int]) -> str:

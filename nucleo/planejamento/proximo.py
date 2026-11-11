@@ -38,8 +38,9 @@ Diz o próximo passo do planejamento, pelo STATUS.md, pela tabela de artefatos, 
 Só lê; a rede só para o retorno, e o hook nunca consulta. A ação recomendada é a primeira que existir, nesta ordem:
 
 1. consertar: no passo 7 com a versão marcada já no HEAD, `harness.py fechar`; nos passos 6 e 7 com o documento
-   mudado desde a marcação, `harness.py versao conferir`; o documento em refino ausente do disco. Num worktree, a
-   ação ganha `(na árvore principal)`.
+   mudado desde a marcação, `harness.py versao conferir`; o documento em refino ausente do disco; o documento ou o
+   pacote do STATUS, nos passos 0 a 6, todo `aprovado` na tabela e sem pendência aberta que o cite: `perguntar ao
+   usuário se o STATUS está velho`, com a volta no motivo. Num worktree, a ação ganha `(na árvore principal)`.
 2. o documento ou o pacote em andamento: `/ela-harness:refinar-documento <documento>`, que retoma do passo atual,
    ou, no passo 7, o commit e o `harness.py fechar`; com "quando o usuário liberar" no `Proximo`, perguntar se o
    usuário libera o commit.
@@ -246,7 +247,24 @@ def _consertar(f: _Fontes, dados: dict[str, str], em_refino: list[str], executar
     if ausente is not None and passo > 0:
         return Item(CONSERTAR, f"o documento em refino não existe: {ausente}",
                     f"passo {passo}; recupere o arquivo (git restore) ou feche o ciclo com o usuário", ausente)
-    return None
+    return _status_velho(f, dados, em_refino)
+
+
+def _status_velho(f: _Fontes, dados: dict[str, str], em_refino: list[str]) -> Item | None:
+    """O quarto caso do consertar (spec da onda 6, bloco D, §7.1): o documento ou pacote do STATUS, nos passos 0 a 6, todo aprovado na
+    tabela e sem pendência aberta que o cite. O STATUS provavelmente está velho: a ação é perguntar ao usuário."""
+    passo = int(dados["Passo"])
+    if not em_refino or not 0 <= passo <= 6:
+        return None
+    if not all(f.aprovado(documento) and not f.citantes(documento) for documento in em_refino):
+        return None
+    alvo = posixpath.basename(em_refino[0]) if len(em_refino) == 1 else f"o pacote de {len(em_refino)}"
+    volta = 'harness.py estado set Documento nenhum && harness.py passo 0 --proximo "<o que vem>"'
+    if dados[versao.CAMPO] != versao.SEM_VERSAO:
+        volta = f"com a autorização do usuário, harness.py versao limpar && {volta}"
+    return Item(CONSERTAR, "perguntar ao usuário se o STATUS está velho",
+                f"o STATUS aponta {alvo} (passo {passo}), aprovado no backlog e sem pendência aberta; "
+                f"se está velho, {volta}", em_refino[0])
 
 
 def _andamento(dados: dict[str, str], em_refino: list[str]) -> Item:
