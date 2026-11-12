@@ -33,7 +33,7 @@ Camada 3: documento na pasta da fase que contém o `documento` da seção `[der]
 | 6 Aprovação humana | o usuário escreveu que aprova este documento, ou o pacote inteiro |
 | 7 Registro | `harness.py passo 7` gravou `aprovado`; pendências e decisões atualizadas; commit feito sem pedido, com `harness.py fechar` na mesma chamada |
 
-Duas regras sem exceção: só o usuário aprova (passo 6), com a palavra dele escrita no chat, nunca por uma opção da ferramenta de opções; e o commit sai só depois dessa palavra, no passo 7, sem nova pergunta, a menos que o usuário peça para esperar. Ao retomar um documento, leia no `STATUS.md` o passo em que parou e continue dele, mesmo com o arquivo pronto.
+Três regras sem exceção: só o usuário aprova (passo 6), com a palavra dele escrita no chat, nunca por uma opção da ferramenta de opções; o commit sai só depois dessa palavra, no passo 7, sem nova pergunta, a menos que o usuário peça para esperar; e pendência nova só com a resposta do usuário à pergunta da escada de `.claude/harness/nucleo/nucleo/planejamento/pendencias.md`, ou com o pedido dele no modo revisão: Ruling, achado do revisor e pergunta aberta não abrem pendência, e o que levam a outro documento vai como nota na pendência aberta de mesmo destino, quando há uma. Ao retomar um documento, leia no `STATUS.md` o passo em que parou e continue dele, mesmo com o arquivo pronto.
 
 Ferramenta de opções: a resposta livre ("Other") nem sempre chega com o texto. Opção que pede texto, como "Corrigir" ou "Há tema fora", ou "Other" sem texto: peça o texto no chat, em uma linha, e espere a resposta antes de seguir.
 

@@ -36,7 +36,7 @@ Com a linha `<n> leitor-frio: FAIL`, rode o teste do leitor frio antes do passo 
 3. Compare cada resposta com a Resposta e a Fonte do Gabarito e proponha, por item, `certa`, `errada` ou `não achou`, com uma frase de motivo quando não é `certa`. Com a confirmação ou a correção do usuário, troque cada `a corrigir` pelo veredito.
 4. Rode de novo `harness.py gate <gate> --verbose` e cole a saída.
 
-Cada `errada` ou `não achou` confirmado é lacuna. Se o conteúdo falta no planejamento, registre-a por `harness.py registrar pendencia`, com destino antes do <gate>. Se o conteúdo existe e a exportação o deixou de fora, leve ao usuário a correção do contrato de passagem, que se faz numa branch do harness. O gate espera a correção e uma rodada nova do leitor.
+Cada `errada` ou `não achou` confirmado é lacuna. Se o conteúdo falta no planejamento, ela sobe a escada de `${CLAUDE_PLUGIN_ROOT}/nucleo/planejamento/pendencias.md` com o marcador `antes do <gate>`, e o "Abrir pendência" junta as lacunas do documento numa pendência só, com `--causa leitor-frio`. Se o conteúdo existe e a exportação o deixou de fora, leve ao usuário a correção do contrato de passagem, que se faz numa branch do harness. O gate espera a correção e uma rodada nova do leitor.
 
 ## Passo 2: revisor
 

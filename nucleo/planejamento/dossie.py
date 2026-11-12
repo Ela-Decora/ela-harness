@@ -244,7 +244,8 @@ def _pendencias(texto_backlog: str, padroes: list[re.Pattern], perfil: Perfil) -
     itens = []
     for numero, id_, situacao in backlog.linhas_de_pendencia(texto_backlog, perfil):
         linha = do_backlog[numero - 1]
-        if situacao.startswith(backlog.PREFIXO_ABERTA) and any(p.search(rastreio.normalizar(linha)) for p in padroes):
+        sem_causa = rastreio.normalizar(backlog.sem_causa(linha))
+        if situacao.startswith(backlog.PREFIXO_ABERTA) and any(p.search(sem_causa) for p in padroes):
             itens.append(f"{id_} ({perfil.caminhos.backlog}:{numero}): {rastreio.cortar(linha, rastreio.LIMITE_TRECHO)}")
     return itens
 

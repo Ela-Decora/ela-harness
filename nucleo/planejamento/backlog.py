@@ -11,13 +11,19 @@ import comum
 from perfil import Perfil
 
 AJUDA = """\
-Confere os IDs das pendências do backlog.md (`caminhos.backlog`) e conta as abertas, ou resolve uma pendência.
+Confere os IDs das pendências do backlog.md (`caminhos.backlog`) e conta as abertas e as causas, resolve uma
+pendência ou troca o destino dela.
 
 `backlog ids` sai com 0 e `OK: <total> pendências, <abertas> abertas`. Com erro, sai com 1 e um por linha: primeiro
 `ID fora do formato <prefixo>-NN em L<n>`, pela linha; depois `ID duplicado: <prefixo>-NN (L<n> e L<m>)` e
 `buraco na sequência: faltam <prefixo>-NN a <prefixo>-NN` (ou `falta <prefixo>-NN`), pelo número. O ID tem dois ou
 mais algarismos, de 01 ao maior, e `<prefixo>-001` é o mesmo que `<prefixo>-01`; a ordem das linhas não importa.
 Backlog ausente ou ilegível: `backlog.md ilegível: <motivo>`, com 1.
+
+`backlog causas` conta as pendências pela causa que o `registrar pendencia` grava no fim da Origem, com `causa:
+<causa>` depois da data. Sai com 0 e uma linha `<causa>: <total> (<abertas> abertas)` por causa presente, na ordem das
+causas, depois `sem causa` quando houver, e `Total: <total> pendências, <abertas> abertas`. As recusas são as do
+`backlog ids`: backlog ausente ou ilegível e IDs com erro, com 1.
 
 `backlog resolver <prefixo>-NN --em <documento> "<como>"` troca só a célula de status da pendência aberta por
 `resolvida em <nome do arquivo do documento>, <AAAA-MM-DD>: <como>`, com `; histórico: <status antigo>` no fim
@@ -27,6 +33,15 @@ com quebra de linha ou com `|`; o `--em` fora do repositório, que não existe o
 por linha; os IDs com erro, que vêm abaixo como no `backlog ids`; `<prefixo>-NN não está no backlog`;
 `<prefixo>-NN não está aberta: <status>`.
 
+`backlog destino <prefixo>-NN "<destino>"` troca só a célula de destino da pendência aberta e acrescenta
+`; <AAAA-MM-DD>: destino era <destino antigo>` ao fim do status, para a pendência seguir ao que resta quando parte
+dela se resolveu. Imprime `<prefixo>-NN com destino <destino> em <backlog>:<linha>`. O ID casa pelo número. Recusa sai
+com 1 e `recusado: <motivo>`, sem gravar: o `destino` vazio, com quebra de linha ou com `|`; o destino novo que perde o
+marcador de um gate (`gates.<gate>.marcador_pendencia`) que o antigo tinha, sem distinção de maiúsculas, com
+`o destino novo perde "<marcador>", que segura o <gate>`; o destino igual ao atual, com `destino: igual ao atual`; os
+IDs com erro, abaixo como no `backlog ids`; `<prefixo>-NN não está no backlog`; `<prefixo>-NN não está aberta:
+<status>`; `<prefixo>-NN não tem a célula de destino`.
+
 O `--em` é o caminho a partir da raiz, como `CLAUDE.md` ou `<pasta do planejamento>/<fase>/<documento>.md`, ou só o
 nome do arquivo, quando ele é único entre os arquivos que o git não ignora, com commit ou sem.
 
@@ -35,7 +50,7 @@ Formato: duas tabelas lidas por script; o resto do arquivo é livre. O prefixo �
 ```text
 | ID | Pendência | Origem | Destino | Status |
 |---|---|---|---|---|
-| <prefixo>-01 | <pendência> | <documento>, <AAAA-MM-DD> | <documento ou fase> | aberta |
+| <prefixo>-01 | <pendência> | <documento>, <AAAA-MM-DD>, causa: <causa> | <documento ou fase> | aberta |
 | <prefixo>-02 | <pendência> | <documento>, <AAAA-MM-DD> | <destino> | resolvida em <documento>, <AAAA-MM-DD>: <como> |
 
 | Caminho | Camada | Status | Data |
@@ -45,6 +60,8 @@ Formato: duas tabelas lidas por script; o resto do arquivo é livre. O prefixo �
 
 - A linha de pendência começa exatamente por `| <prefixo>-`; o ID é a primeira célula, o destino a penúltima e o
   status a última. Status que começa por `aberta` conta como aberta; a linha resolvida fica no arquivo.
+- A causa é opcional: a linha sem ela segue válida e conta como `sem causa`. Uma causa fora da lista também conta
+  como `sem causa`. Os termos do `rastreio` e do `dossie` não casam pela causa.
 - A pendência aberta com o marcador do gate (`gates.<gate>.marcador_pendencia`) no destino, sem distinção de
   maiúsculas, bloqueia o gate.
 - A tabela de artefatos vai do cabeçalho exato até a primeira linha que não começa por `|`; crases em volta do
@@ -52,6 +69,14 @@ Formato: duas tabelas lidas por script; o resto do arquivo é livre. O prefixo �
 """
 
 PREFIXO_ABERTA = "aberta"
+CAUSAS = (
+    "entrevista", "pesquisa", "pesquisa-sem-fonte", "revisor", "ruling", "cascata", "gerar-modulos", "camada-3", "gate",
+    "leitor-frio", "harness", "triagem", "prototipo", "pedido", "codigo", "outro",
+)
+_ROTULOS_DAS_CAUSAS = "|".join(re.escape(rotulo) for rotulo in CAUSAS)
+_CAUSA_NO_FIM = re.compile(r"(\d{4}-\d{2}-\d{2}), causa: (" + _ROTULOS_DAS_CAUSAS + r")\s*$")
+_CAUSA_DEPOIS_DA_DATA = re.compile(r"(\d{4}-\d{2}-\d{2}), causa: (?:" + _ROTULOS_DAS_CAUSAS + r")(?=\s*\|)")
+SEM_CAUSA = "sem causa"
 CABECALHO_ARTEFATOS = ("Caminho", "Camada", "Status", "Data")
 
 
@@ -181,6 +206,35 @@ def abertas_com_marcador(texto: str, perfil: Perfil, marcador: str) -> list[tupl
         for numero, celulas in _pendencias(texto, perfil)
         if len(celulas) > 2 and celulas[-1].startswith(PREFIXO_ABERTA) and procurado in celulas[-2].casefold()
     ]
+
+
+def causa(linha: str) -> str | None:
+    """A causa no fim da célula de Origem, a antepenúltima, de uma linha com 5 células ou mais; None sem ela ou com
+    uma causa fora da `CAUSAS`."""
+    partes = celulas(linha)
+    if len(partes) < 5:
+        return None
+    achada = _CAUSA_NO_FIM.search(partes[-3])
+    return achada.group(2) if achada else None
+
+
+def sem_causa(linha: str) -> str:
+    """A linha sem o `, causa: <causa>` que vem depois da data, para o termo não casar pela causa."""
+    return _CAUSA_DEPOIS_DA_DATA.sub(r"\1", linha)
+
+
+def contar_por_causa(texto: str, perfil: Perfil) -> list[tuple[str, int, int]]:
+    """`(causa, total, abertas)` das pendências, na ordem da `CAUSAS` e só das presentes; depois `("sem causa", ...)`
+    quando houver linha sem causa ou com causa fora da lista."""
+    totais: dict[str, list[int]] = {}
+    linhas = texto.split("\n")
+    for numero, partes in _pendencias(texto, perfil):
+        rotulo = causa(linhas[numero - 1].rstrip("\r")) or SEM_CAUSA
+        contagem = totais.setdefault(rotulo, [0, 0])
+        contagem[0] += 1
+        contagem[1] += partes[-1].startswith(PREFIXO_ABERTA)
+    ordem = [rotulo for rotulo in CAUSAS if rotulo in totais] + ([SEM_CAUSA] if SEM_CAUSA in totais else [])
+    return [(rotulo, totais[rotulo][0], totais[rotulo][1]) for rotulo in ordem]
 
 
 def pendencias_abertas(texto: str, perfil: Perfil) -> list[tuple[int, str, str]]:

@@ -71,8 +71,7 @@ Registro no ato, depois da resposta e antes de escrever qualquer arquivo:
 
 - `harness.py registrar ruling "Proposta de módulos: <módulo> (<caminho>), com <caminhos das entidades e das telas que ele mantém>; ..." --por "<o porquê da proposta>" --custo "<custo se errado>"`, com todos os caminhos que o passo 3 vai escrever. É o que a retomada lê.
 - Um Ruling para o modelo lógico e um para cada dúvida respondida que vale além de um documento.
-- A entidade do `erDiagram` que a rodada tira não ganha arquivo nem aparece como relação, e a que ela acrescenta ganha arquivo: nos dois casos, um Ruling com o motivo e uma pendência, `harness.py registrar pendencia "<o modelo conceitual ainda lista a entidade tirada, ou não tem a acrescentada>" --origem <modelo conceitual> --destino "<caminho do modelo conceitual>, <marcador do gate>"`, que pede a revisão dele antes do gate.
-- A pergunta que fica aberta vira pendência com o marcador do gate no destino.
+- A entidade do `erDiagram` que a rodada tira não ganha arquivo nem aparece como relação, e a que ela acrescenta ganha arquivo: nos dois casos, um Ruling com o motivo; a revisão do modelo conceitual sobe a escada de `${CLAUDE_PLUGIN_ROOT}/nucleo/planejamento/pendencias.md`, com destino nele e o marcador do gate, e o "Abrir pendência" junta as entidades tiradas e acrescentadas numa pendência só, com `--causa gerar-modulos`.
 
 ## Passo 3: escrita
 

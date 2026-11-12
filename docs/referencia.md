@@ -34,7 +34,7 @@ Gerado por `harness.py referencia --gravar`. Não edite este arquivo: mude a `AJ
 | **Ciclo** | Os oito passos, de 0 a 7, por que passa cada documento ou pacote; o 0 é a preparação. O passo atual fica no campo `Passo` do STATUS.md. |
 | **Rodada** | Uma volta de perguntas da entrevista (passo 2), até 4 perguntas numa chamada da ferramenta de opções, ou uma volta do revisor (passo 5), no máximo 2. Fica no campo `Rodada` e recomeça em 1 no passo 5. |
 | **Fonte** | De onde vem o conteúdo, em ordem de precedência: as decisões registradas e o `CLAUDE.md`, depois o rascunho, depois as pastas de `caminhos.fontes`, na ordem do perfil. |
-| **`[A CONFIRMAR: motivo]`** | Marca de inferência do modelo. No passo 4, cada uma vira pergunta da ferramenta de opções: confirmada, a marca sai e o texto fica; "tirar", o trecho sai; corrigida, o trecho é reescrito sem marca. Ficam de fora as que citam uma pendência ou "pesquisa pendente". O `checar` conta as marcas, mas não falha por elas. |
+| **`[A CONFIRMAR: motivo]`** | Marca de inferência do modelo. No passo 4, cada uma vira pergunta da ferramenta de opções: confirmada, a marca sai e o texto fica; "tirar", o trecho sai; corrigida, o trecho é reescrito sem marca. Ficam de fora as que citam uma pendência, "pesquisa pendente" ou "pergunta aberta". O `checar` conta as marcas, mas não falha por elas. |
 | **Ruling** | Decisão que vale além de um documento, registrada no arquivo de decisões (`caminhos.decisoes`) como `Ruling: o quê — por quê — custo se errado`, por `harness.py registrar ruling`. |
 | **Pendência** | Linha `<prefixo>-NN` da tabela de pendências do backlog.md (`caminhos.backlog`), com origem, destino e status; o prefixo é o `ids.prefixo_pendencia`. A pendência aberta com o marcador do gate no destino (`gates.<gate>.marcador_pendencia`) bloqueia o gate. |
 | **Relato** | Informação nova que surge na conversa, acrescentada por `harness.py registrar relato` à seção de informação nova do rascunho (`caminhos.rascunho`) como `<prefixo>-NN`, com o prefixo de `ids.prefixo_relato`. Entra confirmada ou não confirmada e fica pendente até ser incorporada a um documento ou descartada. |
@@ -50,11 +50,11 @@ Gerado por `harness.py referencia --gravar`. Não edite este arquivo: mude a `AJ
 | Comando | O que faz |
 |---|---|
 | [`estado`](#estado) | valida e imprime o STATUS.md |
-| [`backlog`](#backlog) | confere o backlog do planejamento ou resolve uma pendência |
+| [`backlog`](#backlog) | confere o backlog do planejamento, conta as causas, resolve uma pendência ou troca o destino dela |
 | [`checar`](#checar) | confere documentos de planejamento contra o molde |
 | [`dossie`](#dossie) | monta as fontes de cada documento num arquivo fora do git |
 | [`afetados`](#afetados) | lista quem cita um ID ou um termo, pelo status do documento |
-| [`registrar`](#registrar) | acrescenta no ato um Ruling, uma pendência, um relato ou um registro do passo 7 |
+| [`registrar`](#registrar) | acrescenta no ato um Ruling, uma pendência, uma nota, um relato ou um registro do passo 7 |
 | [`passo`](#passo) | fecha um passo do ciclo: grava o STATUS.md e o status do artefato |
 | [`molde`](#molde) | imprime o molde de um documento de planejamento |
 | [`der`](#der) | gera e confere o DDL e o diagrama do DER físico |
@@ -167,17 +167,23 @@ muda um campo do STATUS.md, validando antes de gravar
 
 ## backlog
 
-confere o backlog do planejamento ou resolve uma pendência
+confere o backlog do planejamento, conta as causas, resolve uma pendência ou troca o destino dela
 
 `harness.py backlog <ação>`
 
-Confere os IDs das pendências do backlog.md (`caminhos.backlog`) e conta as abertas, ou resolve uma pendência.
+Confere os IDs das pendências do backlog.md (`caminhos.backlog`) e conta as abertas e as causas, resolve uma
+pendência ou troca o destino dela.
 
 `backlog ids` sai com 0 e `OK: <total> pendências, <abertas> abertas`. Com erro, sai com 1 e um por linha: primeiro
 `ID fora do formato <prefixo>-NN em L<n>`, pela linha; depois `ID duplicado: <prefixo>-NN (L<n> e L<m>)` e
 `buraco na sequência: faltam <prefixo>-NN a <prefixo>-NN` (ou `falta <prefixo>-NN`), pelo número. O ID tem dois ou
 mais algarismos, de 01 ao maior, e `<prefixo>-001` é o mesmo que `<prefixo>-01`; a ordem das linhas não importa.
 Backlog ausente ou ilegível: `backlog.md ilegível: <motivo>`, com 1.
+
+`backlog causas` conta as pendências pela causa que o `registrar pendencia` grava no fim da Origem, com `causa:
+<causa>` depois da data. Sai com 0 e uma linha `<causa>: <total> (<abertas> abertas)` por causa presente, na ordem das
+causas, depois `sem causa` quando houver, e `Total: <total> pendências, <abertas> abertas`. As recusas são as do
+`backlog ids`: backlog ausente ou ilegível e IDs com erro, com 1.
 
 `backlog resolver <prefixo>-NN --em <documento> "<como>"` troca só a célula de status da pendência aberta por
 `resolvida em <nome do arquivo do documento>, <AAAA-MM-DD>: <como>`, com `; histórico: <status antigo>` no fim
@@ -187,6 +193,15 @@ com quebra de linha ou com `|`; o `--em` fora do repositório, que não existe o
 por linha; os IDs com erro, que vêm abaixo como no `backlog ids`; `<prefixo>-NN não está no backlog`;
 `<prefixo>-NN não está aberta: <status>`.
 
+`backlog destino <prefixo>-NN "<destino>"` troca só a célula de destino da pendência aberta e acrescenta
+`; <AAAA-MM-DD>: destino era <destino antigo>` ao fim do status, para a pendência seguir ao que resta quando parte
+dela se resolveu. Imprime `<prefixo>-NN com destino <destino> em <backlog>:<linha>`. O ID casa pelo número. Recusa sai
+com 1 e `recusado: <motivo>`, sem gravar: o `destino` vazio, com quebra de linha ou com `|`; o destino novo que perde o
+marcador de um gate (`gates.<gate>.marcador_pendencia`) que o antigo tinha, sem distinção de maiúsculas, com
+`o destino novo perde "<marcador>", que segura o <gate>`; o destino igual ao atual, com `destino: igual ao atual`; os
+IDs com erro, abaixo como no `backlog ids`; `<prefixo>-NN não está no backlog`; `<prefixo>-NN não está aberta:
+<status>`; `<prefixo>-NN não tem a célula de destino`.
+
 O `--em` é o caminho a partir da raiz, como `CLAUDE.md` ou `<pasta do planejamento>/<fase>/<documento>.md`, ou só o
 nome do arquivo, quando ele é único entre os arquivos que o git não ignora, com commit ou sem.
 
@@ -195,7 +210,7 @@ Formato: duas tabelas lidas por script; o resto do arquivo é livre. O prefixo �
 ```text
 | ID | Pendência | Origem | Destino | Status |
 |---|---|---|---|---|
-| <prefixo>-01 | <pendência> | <documento>, <AAAA-MM-DD> | <documento ou fase> | aberta |
+| <prefixo>-01 | <pendência> | <documento>, <AAAA-MM-DD>, causa: <causa> | <documento ou fase> | aberta |
 | <prefixo>-02 | <pendência> | <documento>, <AAAA-MM-DD> | <destino> | resolvida em <documento>, <AAAA-MM-DD>: <como> |
 
 | Caminho | Camada | Status | Data |
@@ -205,6 +220,8 @@ Formato: duas tabelas lidas por script; o resto do arquivo é livre. O prefixo �
 
 - A linha de pendência começa exatamente por `| <prefixo>-`; o ID é a primeira célula, o destino a penúltima e o
   status a última. Status que começa por `aberta` conta como aberta; a linha resolvida fica no arquivo.
+- A causa é opcional: a linha sem ela segue válida e conta como `sem causa`. Uma causa fora da lista também conta
+  como `sem causa`. Os termos do `rastreio` e do `dossie` não casam pela causa.
 - A pendência aberta com o marcador do gate (`gates.<gate>.marcador_pendencia`) no destino, sem distinção de
   maiúsculas, bloqueia o gate.
 - A tabela de artefatos vai do cabeçalho exato até a primeira linha que não começa por `|`; crases em volta do
@@ -215,6 +232,12 @@ Formato: duas tabelas lidas por script; o resto do arquivo é livre. O prefixo �
 confere os IDs das pendências e conta as abertas
 
 `harness.py backlog ids`
+
+### backlog causas
+
+conta as pendências por causa
+
+`harness.py backlog causas`
 
 ### backlog resolver
 
@@ -227,6 +250,17 @@ marca uma pendência aberta como resolvida, com o documento e como
 | `<pendência>` | sim | o ID, como &lt;prefixo>-NN |
 | `--em <documento>` | sim | o documento que a resolveu: o caminho a partir da raiz, ou só o nome, se for único |
 | `<como>` | sim | como foi resolvida, numa linha, sem \| |
+
+### backlog destino
+
+leva o destino de uma pendência aberta ao que resta
+
+`harness.py backlog destino <pendência> <destino>`
+
+| Argumento ou opção | Obrigatório | O que é |
+|---|---|---|
+| `<pendência>` | sim | o ID, como &lt;prefixo>-NN |
+| `<destino>` | sim | o destino novo: os documentos que restam, com os marcadores do antigo |
 
 ## checar
 
@@ -447,14 +481,15 @@ ele, todas, com a seção e o trecho. Alvo vazio: `recusado: alvo vazio`, com 1.
 
 ## registrar
 
-acrescenta no ato um Ruling, uma pendência, um relato ou um registro do passo 7
+acrescenta no ato um Ruling, uma pendência, uma nota, um relato ou um registro do passo 7
 
 `harness.py registrar <ação>`
 
-Acrescenta no ato um Ruling ao arquivo de decisões, uma pendência ao backlog.md, um relato ao rascunho ou um registro
-do passo 7.
+Acrescenta no ato um Ruling ao arquivo de decisões, uma pendência ao backlog.md, uma nota a uma pendência aberta, um
+relato ao rascunho ou um registro do passo 7.
 
-Nenhuma ação tira ou altera linha: a linha nova entra no fim da seção ou da tabela, com a quebra de linha do arquivo,
+Só o `registrar nota` muda uma linha que já existe, e só a célula de status; as outras ações não tiram nem
+alteram linha: a linha nova entra no fim da seção ou da tabela, com a quebra de linha do arquivo,
 e a saída diz onde. Recusa sai com 1 e `recusado: <motivo>`, sem gravar: texto vazio ou com quebra de linha, arquivo
 ausente ou ilegível, arquivo sem a seção ou a tabela.
 
@@ -463,12 +498,21 @@ ausente ou ilegível, arquivo sem a seção ou a tabela.
 Ruling mais recente.
 
 `registrar pendencia` grava a pendência aberta, com o número seguinte ao maior, como última linha da tabela de
-pendências do backlog.md, e imprime `<prefixo>-NN acrescentada em <arquivo>:<linha>`. Recusa também `|` no texto, na
-origem ou no destino, e IDs de pendência com erro, que vêm abaixo como no `harness.py backlog ids`.
+pendências do backlog.md, e imprime `<prefixo>-NN acrescentada em <arquivo>:<linha>`. O `--causa` é obrigatório, de
+uma lista fixa, e é gravado no fim da Origem. Recusa também `|` no texto, na origem ou no destino, e IDs de pendência
+com erro, que vêm abaixo como no `harness.py backlog ids`. Ela vem só de uma das três fontes da escada de
+`pendencias.md` do núcleo (a resposta "Abrir pendência", o pedido do usuário no modo revisão, o retorno do código);
+antes, a nota numa pendência aberta de mesmo destino.
+
+`registrar nota` acrescenta `; <AAAA-MM-DD>: <nota>` ao fim da célula de status de uma pendência aberta, sem mexer no
+resto da linha, e imprime `<prefixo>-NN anotada em <arquivo>:<linha>`. O ID casa pelo número, de modo que `<prefixo>-3`
+acha a `<prefixo>-03`. Recusa nota vazia, com quebra de linha ou com `|`, pendência fora do backlog ou que não está
+aberta, e IDs com erro. O que sobra noutro documento começa a nota por `resta em <documento>: `.
 
 ```text
 - <AAAA-MM-DD> Ruling: <decisão> — <por quê> — <custo se errado>.
-| <prefixo>-NN | <pendência> | <nome do arquivo de origem>, <AAAA-MM-DD> | <destino> | aberta |
+| <prefixo>-NN | <pendência> | <nome do arquivo de origem>, <AAAA-MM-DD>, causa: <causa> | <destino> | aberta |
+| <prefixo>-NN | ... | ... | <destino> | aberta; <AAAA-MM-DD>: <nota> |
 ```
 
 `registrar aprovacao`, `registrar descartada` e `registrar trecho` gravam a linha no fim da seção do arquivo de
@@ -522,13 +566,25 @@ acrescenta um Ruling à seção de Rulings das decisões
 
 acrescenta uma pendência aberta à tabela de pendências
 
-`harness.py registrar pendencia <pendência> --origem <origem> --destino <destino>`
+`harness.py registrar pendencia <pendência> --origem <origem> --destino <destino> --causa {entrevista,pesquisa,pesquisa-sem-fonte,revisor,ruling,cascata,gerar-modulos,camada-3,gate,leitor-frio,harness,triagem,prototipo,pedido,codigo,outro}`
 
 | Argumento ou opção | Obrigatório | O que é |
 |---|---|---|
 | `<pendência>` | sim | a pendência, numa linha, sem \| |
 | `--origem <origem>` | sim | o documento de onde ela veio |
 | `--destino <destino>` | sim | o documento ou a camada que a resolve |
+| `--causa {entrevista,pesquisa,pesquisa-sem-fonte,revisor,ruling,cascata,gerar-modulos,camada-3,gate,leitor-frio,harness,triagem,prototipo,pedido,codigo,outro}` | sim | o que abriu a pendência, da lista do núcleo: entrevista, pesquisa, pesquisa-sem-fonte, revisor, ruling, cascata, gerar-modulos, camada-3, gate, leitor-frio, harness, triagem, prototipo, pedido, codigo, outro |
+
+### registrar nota
+
+acrescenta uma nota datada ao status de uma pendência aberta
+
+`harness.py registrar nota <pendência> <nota>`
+
+| Argumento ou opção | Obrigatório | O que é |
+|---|---|---|
+| `<pendência>` | sim | o ID, como &lt;prefixo>-NN |
+| `<nota>` | sim | a nota, numa linha, sem \|; o que sobra noutro documento começa por resta em &lt;documento>: |
 
 ### registrar relato
 
@@ -1393,7 +1449,7 @@ Com `[passagem]` no perfil:
   `(na árvore principal)`; a falha do git dá `passagem não conferida: <motivo>`.
 - Retorno, só no comando: `gh issue list --label retorno --state open --limit 1000 --json number,title`, na raiz,
   com 10 s. A issue sem pendência, aberta ou resolvida, que cite `retorno #N` em qualquer célula vira
-  `retorno sem pendência: #N <título>; registre por harness.py registrar pendencia citando retorno #N`; a com
+  `retorno sem pendência: #N <título>; registre por harness.py registrar pendencia --causa codigo citando retorno #N`; a com
   pendência sai só no `--verbose`. A falha dá `retorno não consultado: <motivo>`: `gh indisponível: <motivo>`,
   `gh passou de 10 s`, a primeira linha do erro do `gh` ou `saída do gh ilegível`.
 
@@ -3030,7 +3086,7 @@ refaz o espelho das fichas no Linear, sem duplicar nada
 | `nucleo/planejamento/perfil.py` | Perfil do projeto (spec da fase 2a, §5): tudo o que é do projeto, lido de .claude/perfil.toml e validado. |
 | `nucleo/planejamento/proximo.py` | O próximo passo do planejamento (spec 4a, §6), calculado pelo STATUS, pelos artefatos, pelas pendências, pelos links e pelo ambiente. |
 | `nucleo/planejamento/rastreio.py` | Rastreio entre os documentos do planejamento (spec 4b, §5 e §11): quem cita cada documento, termo ou ID, e com que status. |
-| `nucleo/planejamento/registro.py` | Registro no ato (spec 4b, §10, e 4a, §9): Ruling, pendência e relato acrescentados no formato de cada arquivo, sem tirar nem alterar linha. |
+| `nucleo/planejamento/registro.py` | Registro no ato (spec 4b, §10, e 4a, §9): Ruling, pendência e relato acrescentados no formato de cada arquivo, sem tirar linha. |
 | `nucleo/planejamento/sessao.py` | Início da sessão (spec 4a, §8.1 e §18): o JSON do hook SessionStart, com o aviso ao usuário e o contexto do modelo. |
 | `nucleo/planejamento/versao.py` | Hash da versão enviada para aprovação (passo 6 do ciclo): marcar, conferir e limpar. |
 | `nucleo/comum/saida.md` | os moldes do que o usuário lê no chat; o passo que produz cada saída lê este arquivo na hora de escrever |

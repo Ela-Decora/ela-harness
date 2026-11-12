@@ -9,7 +9,7 @@ Cada entidade do bloco `erDiagram` do modelo conceitual passa por estes testes a
 1. **Objeto real.** Tem várias instâncias, atributos próprios, e o usuário se importa com ela por si. A instância única tomada por objeto (a organização que usa o sistema, a loja, a sede) não é entidade. Pergunta: "<NOME> é entidade ou a instância única do sistema?", com "tirar" recomendado quando nenhum RF cria nem muda mais de uma.
 2. **Relação escrita como atributo.** O atributo que é só o nome ou o ID de outra entidade é relação: vai para "Relações com outras entidades", nunca para "Atributos principais". Vale também quando o texto do modelo conceitual diz que X "guarda" ou "tem" o nome, o número ou o código de Y: é a relação X → Y, e o atributo não entra. Não pede pergunta.
 3. **Provisória.** A entidade que nenhuma tarefa de um ator obriga a guardar estado e a ser reaberta fica como pergunta: "<NOME> precisa existir por si, ou é atributo de <outra>?".
-4. **Falta no modelo.** A entidade que um RF, uma RN ou um ator pede e o `erDiagram` não tem também vira pergunta, nunca arquivo calado: o modelo conceitual aprovado é a fonte das entidades, e mudá-lo pede uma pendência com destino nele. Pergunta: "<NOME> falta no modelo conceitual: acrescentar ou deixar fora?", com "acrescentar" recomendado só quando um RF ou uma RN guarda dado dele; ser ator não basta.
+4. **Falta no modelo.** A entidade que um RF, uma RN ou um ator pede e o `erDiagram` não tem também vira pergunta, nunca arquivo calado: o modelo conceitual aprovado é a fonte das entidades, e mudá-lo pede a revisão dele, pela escada de `.claude/harness/nucleo/nucleo/planejamento/pendencias.md`, com `--causa gerar-modulos` se a resposta abrir pendência. Pergunta: "<NOME> falta no modelo conceitual: acrescentar ou deixar fora?", com "acrescentar" recomendado só quando um RF ou uma RN guarda dado dele; ser ator não basta.
 
 ## Os princípios da escrita
 
@@ -18,7 +18,7 @@ Cada entidade do bloco `erDiagram` do modelo conceitual passa por estes testes a
 - **Relação com cardinalidade e papel.** Cada item de "Relações com outras entidades" diz quantos de cada lado e o papel, com o link da outra entidade: `- Um <entidade> tem muitos [<outra>](entidade-<outra>.md) (<fonte>).` A instância tirada no passo 2 não aparece como relação.
 - **Verbo preciso.** As ações e as transições usam o verbo do negócio ("aprovar o pedido", "cancelar a inscrição"), não "atualizar" nem "alterar".
 - **O tempo.** "Estados e ciclo de vida" diz os estados e o verbo de cada transição, com um bloco `stateDiagram-v2` quando há mais de dois estados; como a entidade nasce; como sai (arquivar, lixeira, apagar de vez ou apagar por exigência legal), com o motivo; e se guarda histórico. Sem estados: `Sem estados: <motivo>`.
-- **Um nome por conceito.** O nome do arquivo, o título e o texto usam o termo do glossário de "Este projeto". Termo novo vira pendência com destino no documento do glossário, que está aprovado.
+- **Um nome por conceito.** O nome do arquivo, o título e o texto usam o termo do glossário de "Este projeto". Termo novo vai ao glossário, que está aprovado, pela escada de `.claude/harness/nucleo/nucleo/planejamento/pendencias.md`, com `--causa gerar-modulos` se a resposta abrir pendência, junto com as entidades do mesmo documento.
 - **Regras são invariantes.** "Regras e restrições" traz o que vale sempre para a entidade (limites, unicidade, o que não pode mudar), com a RN ou o RF; a regra de uma tarefa fica na tela ou na funcionalidade.
 
 ## O arquivo

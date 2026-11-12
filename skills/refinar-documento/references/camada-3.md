@@ -73,7 +73,7 @@ O documento não dá nome a chave, índice nem restrição.
   - origem que não casa com nenhum item: copie o trecho do item como está, com os acentos; origem que casa com mais de um: use um trecho maior;
   - relação sem FK nem tabela de ligação: crie a coluna de FK com `relação: <rótulo>` numa tabela de uma das entidades, apontando para uma tabela da outra, ou a tabela com `Ligação: <rótulo> (<A> e <B>)`;
   - `relação:` que não é uma relação entre as duas entidades: use o rótulo do modelo conceitual; a que é de cópia: tire a FK e copie os atributos com a Origem `<NOME_NO_ER>: <trecho>`;
-  - origem de cópia sem relação de cópia entre as entidades, ou entidade que falta no modelo conceitual: a correção é na camada 2; registre a pendência por `harness.py registrar pendencia` e pergunte ao usuário;
+  - origem de cópia sem relação de cópia entre as entidades, ou entidade que falta no modelo conceitual: a correção é na camada 2; suba a escada de `.claude/harness/nucleo/nucleo/planejamento/pendencias.md`, com `--causa camada-3` se a resposta abrir pendência;
   - `técnica` fora de `[der].tecnicas`: dê à coluna uma Origem de atributo; o link da linha `Entidade:` que não resolve: corrija o caminho.
 
 ## No passo 5
@@ -111,7 +111,7 @@ O documento não dá nome a chave, índice nem restrição.
 
 - Um contrato por operação externa, numa seção `### CTR-NN <sistema>: <operação>`, na ordem em que a sequência da arquitetura da aplicação chama. Os avisos de mesmo formato que um sistema manda ao produto ficam juntos num contrato só.
 - Os nove campos do cabeçalho, um por item: Quem chama; Contêiner, o do C4 que faz ou recebe a chamada; Versão da API; Autenticação, o meio, nunca o segredo; Tempo limite; Novas tentativas; Limite de uso; Recusa e erro; e Exemplo. Em Recusa e erro, a recusa, a resposta que a regra de negócio trata como "não atende", fica separada do erro técnico, com os códigos conhecidos.
-- O valor que nenhuma fonte dá fica "desconhecido", com a pendência que o descobre na mesma linha. A pendência está aberta, tem destino num teste antes da virada e nunca leva o marcador de pendência do gate da fase, que o `pendencias-do-gate` cobraria no gate. O `pendencia-na-linha` a confere no passo 4.
+- O valor que nenhuma fonte dá fica "desconhecido", com a pendência que o descobre na mesma linha: uma aberta com destino no mesmo teste, ou, pela pergunta da escada de `.claude/harness/nucleo/nucleo/planejamento/pendencias.md`, uma nova, com "Abrir pendência" recomendado e `--causa pesquisa-sem-fonte`, porque o `pendencia-na-linha` exige o ID. A pendência está aberta, tem destino num teste antes da virada e nunca leva o marcador de pendência do gate da fase, que o `pendencias-do-gate` cobraria no gate. O `pendencia-na-linha` a confere no passo 4.
 - A tabela dos campos usados tem o nome do campo, o tipo, se é obrigatório, a coluna que liga o campo ao dado do produto e a Fonte. A Fonte de cada linha é um link para a seção do guia do sistema, numa pasta de `caminhos.fontes`, ou para a documentação oficial dele. O `colunas` confere que toda linha tem o link, e o `links`, que o guia existe; a âncora da seção, o `links` não confere: confira-a ao escrever.
 - O pedido e a resposta em JSON, nos dois blocos do molde, são copiados da fonte do link do campo Exemplo. Nenhum script lê os blocos; o revisor do ciclo confere que saíram da fonte.
 - O contrato fixa a versão usada, e a troca de versão vira um risco `RSC-NN` na entrega e operação. O fato novo que um teste traz corrige o contrato e o guia.

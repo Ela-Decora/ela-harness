@@ -188,21 +188,43 @@ def _comando_estado_set(args: argparse.Namespace) -> int:
     return 0
 
 
-def _comando_backlog_ids(args: argparse.Namespace) -> int:
-    """Confere os IDs de pendência do backlog. Sem erro imprime os totais; com erro, um por linha, e sai com 1."""
-    raiz, perfil = _projeto()
+def _backlog_conferido(raiz: Path, perfil: Perfil) -> str | None:
+    """O texto do backlog com os IDs conferidos. Se está ilegível ou tem ID com erro, imprime o motivo (os erros, um
+    por linha) e devolve None."""
     try:
         texto = backlog.ler(raiz / perfil.caminhos.backlog)
     except backlog.BacklogIlegivel as erro:
         print("backlog.md ilegível: " + _uma_linha(erro.mensagem))
-        return 1
+        return None
     erros = backlog.conferir_ids(texto, perfil)
     if erros:
         for erro in erros:
             print(erro)
+        return None
+    return texto
+
+
+def _comando_backlog_ids(args: argparse.Namespace) -> int:
+    """Confere os IDs de pendência do backlog. Sem erro imprime os totais; com erro, um por linha, e sai com 1."""
+    raiz, perfil = _projeto()
+    texto = _backlog_conferido(raiz, perfil)
+    if texto is None:
         return 1
     total = len(backlog.linhas_de_pendencia(texto, perfil))
     print(f"OK: {total} pendências, {backlog.contar_abertas(texto, perfil)} abertas")
+    return 0
+
+
+def _comando_backlog_causas(args: argparse.Namespace) -> int:
+    """Conta as pendências do backlog por causa. As recusas são as do `backlog ids`."""
+    raiz, perfil = _projeto()
+    texto = _backlog_conferido(raiz, perfil)
+    if texto is None:
+        return 1
+    for rotulo, total, abertas in backlog.contar_por_causa(texto, perfil):
+        print(f"{rotulo}: {total} ({abertas} abertas)")
+    total = len(backlog.linhas_de_pendencia(texto, perfil))
+    print(f"Total: {total} pendências, {backlog.contar_abertas(texto, perfil)} abertas")
     return 0
 
 
@@ -217,6 +239,20 @@ def _comando_backlog_resolver(args: argparse.Namespace) -> int:
     except OSError as erro:
         return _recusar_versao(erro)
     print(f"{id_} resolvida em {perfil.caminhos.backlog}:{linha}")
+    return 0
+
+
+def _comando_backlog_destino(args: argparse.Namespace) -> int:
+    """Leva o destino de uma pendência aberta ao que resta, anotando o antigo no status. Recusa sai com 1, sem gravar
+    nada."""
+    raiz, perfil = _projeto()
+    try:
+        linha, id_ = registro.trocar_destino(raiz, perfil, args.id, args.destino)
+    except registro.RegistroRecusado as erro:
+        return _recusar_registro(erro)
+    except OSError as erro:
+        return _recusar_versao(erro)
+    print(f"{id_} com destino {args.destino.strip()} em {perfil.caminhos.backlog}:{linha}")
     return 0
 
 
@@ -1007,12 +1043,25 @@ def _comando_registrar_pendencia(args: argparse.Namespace) -> int:
     """Acrescenta uma pendência aberta à tabela de pendências. Recusa sai com 1, sem gravar nada."""
     raiz, perfil = _projeto()
     try:
-        id_, linha = registro.pendencia(raiz, perfil, args.texto, args.origem, args.destino)
+        id_, linha = registro.pendencia(raiz, perfil, args.texto, args.origem, args.destino, args.causa)
     except registro.RegistroRecusado as erro:
         return _recusar_registro(erro)
     except OSError as erro:
         return _recusar_versao(erro)
     print(f"{id_} acrescentada em {perfil.caminhos.backlog}:{linha}")
+    return 0
+
+
+def _comando_registrar_nota(args: argparse.Namespace) -> int:
+    """Acrescenta uma nota datada à célula de status de uma pendência aberta. Recusa sai com 1, sem gravar nada."""
+    raiz, perfil = _projeto()
+    try:
+        linha, id_ = registro.nota(raiz, perfil, args.id, args.texto)
+    except registro.RegistroRecusado as erro:
+        return _recusar_registro(erro)
+    except OSError as erro:
+        return _recusar_versao(erro)
+    print(f"{id_} anotada em {perfil.caminhos.backlog}:{linha}")
     return 0
 
 
@@ -1152,10 +1201,12 @@ def _comando_referencia(args: argparse.Namespace) -> int:
     return 0
 
 
-def _nova_acao(acoes: argparse._SubParsersAction, nome: str, ajuda: str) -> argparse.ArgumentParser:
-    """Cria a ação `nome` com a ajuda de uma linha também como descrição: o `--help` da ação a mostra (spec 4c,
-    decisão 9)."""
-    return acoes.add_parser(nome, help=ajuda, description=ajuda)
+def _nova_acao(
+    acoes: argparse._SubParsersAction, nome: str, ajuda: str, descricao: str | None = None
+) -> argparse.ArgumentParser:
+    """Cria a ação `nome` com a ajuda de uma linha como `help` e, sem `descricao`, também como descrição: o `--help`
+    da ação a mostra (spec 4c, decisão 9)."""
+    return acoes.add_parser(nome, help=ajuda, description=descricao or ajuda)
 
 
 def _acrescentar_invariantes(subcomandos: argparse._SubParsersAction) -> None:
@@ -1483,11 +1534,15 @@ def _montar_parser(trilha: str = perfil_comum.PLANEJAMENTO) -> argparse.Argument
     p_set.set_defaults(funcao=_comando_estado_set)
 
     p_backlog = subcomandos.add_parser(
-        "backlog", help="confere o backlog do planejamento ou resolve uma pendência", description=backlog.AJUDA
+        "backlog",
+        help="confere o backlog do planejamento, conta as causas, resolve uma pendência ou troca o destino dela",
+        description=backlog.AJUDA,
     )
     acoes_backlog = p_backlog.add_subparsers(dest="acao", metavar="<ação>", required=True)
     p_ids = _nova_acao(acoes_backlog, "ids", "confere os IDs das pendências e conta as abertas")
     p_ids.set_defaults(funcao=_comando_backlog_ids)
+    p_causas = _nova_acao(acoes_backlog, "causas", "conta as pendências por causa")
+    p_causas.set_defaults(funcao=_comando_backlog_causas)
     p_resolver = _nova_acao(acoes_backlog, "resolver", "marca uma pendência aberta como resolvida, com o documento e como")
     p_resolver.add_argument("id", metavar="pendência", help="o ID, como <prefixo>-NN")
     p_resolver.add_argument(
@@ -1496,6 +1551,12 @@ def _montar_parser(trilha: str = perfil_comum.PLANEJAMENTO) -> argparse.Argument
     )
     p_resolver.add_argument("como", help="como foi resolvida, numa linha, sem |")
     p_resolver.set_defaults(funcao=_comando_backlog_resolver)
+    p_destino = _nova_acao(acoes_backlog, "destino", "leva o destino de uma pendência aberta ao que resta")
+    p_destino.add_argument("id", metavar="pendência", help="o ID, como <prefixo>-NN")
+    p_destino.add_argument(
+        "destino", help="o destino novo: os documentos que restam, com os marcadores do antigo"
+    )
+    p_destino.set_defaults(funcao=_comando_backlog_destino)
 
     p_checar = subcomandos.add_parser(
         "checar", help="confere documentos de planejamento contra o molde", description=checar.AJUDA
@@ -1528,7 +1589,7 @@ def _montar_parser(trilha: str = perfil_comum.PLANEJAMENTO) -> argparse.Argument
     p_afetados.set_defaults(funcao=_comando_afetados)
 
     p_registrar = subcomandos.add_parser(
-        "registrar", help="acrescenta no ato um Ruling, uma pendência, um relato ou um registro do passo 7",
+        "registrar", help="acrescenta no ato um Ruling, uma pendência, uma nota, um relato ou um registro do passo 7",
         description=registro.AJUDA,
     )
     acoes_registrar = p_registrar.add_subparsers(dest="acao", metavar="<ação>", required=True)
@@ -1537,11 +1598,28 @@ def _montar_parser(trilha: str = perfil_comum.PLANEJAMENTO) -> argparse.Argument
     p_ruling.add_argument("--por", required=True, help="por quê")
     p_ruling.add_argument("--custo", required=True, help="o custo se estiver errada")
     p_ruling.set_defaults(funcao=_comando_registrar_ruling)
-    p_pendencia = _nova_acao(acoes_registrar, "pendencia", "acrescenta uma pendência aberta à tabela de pendências")
+    p_pendencia = _nova_acao(
+        acoes_registrar, "pendencia", "acrescenta uma pendência aberta à tabela de pendências",
+        "acrescenta uma pendência aberta à tabela de pendências. Só com uma das três fontes da escada de "
+        ".claude/harness/nucleo/nucleo/planejamento/pendencias.md: a resposta \"Abrir pendência\" do usuário, o pedido "
+        "dele no modo revisão ou o retorno do código. Antes, a nota numa pendência aberta de mesmo destino, por "
+        "registrar nota.",
+    )
     p_pendencia.add_argument("texto", metavar="pendência", help="a pendência, numa linha, sem |")
     p_pendencia.add_argument("--origem", required=True, help="o documento de onde ela veio")
     p_pendencia.add_argument("--destino", required=True, help="o documento ou a camada que a resolve")
+    p_pendencia.add_argument(
+        "--causa", required=True, choices=backlog.CAUSAS, metavar="causa",
+        help="o que abriu a pendência, da lista do núcleo: " + ", ".join(backlog.CAUSAS),
+    )
     p_pendencia.set_defaults(funcao=_comando_registrar_pendencia)
+    p_nota = _nova_acao(acoes_registrar, "nota", "acrescenta uma nota datada ao status de uma pendência aberta")
+    p_nota.add_argument("id", metavar="pendência", help="o ID, como <prefixo>-NN")
+    p_nota.add_argument(
+        "texto", metavar="nota",
+        help="a nota, numa linha, sem |; o que sobra noutro documento começa por resta em <documento>:",
+    )
+    p_nota.set_defaults(funcao=_comando_registrar_nota)
     p_relato = _nova_acao(
         acoes_registrar, "relato", "acrescenta informação nova da conversa ao rascunho, ou muda o status de um relato"
     )

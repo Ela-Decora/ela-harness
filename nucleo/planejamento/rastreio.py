@@ -365,7 +365,7 @@ def afetados(raiz: Path, perfil: Perfil, textos_dos_alvos: list[str]) -> Afetado
         if any(alvo.pendencia in _pendencias_citadas(id_, perfil) for alvo in alvos if alvo.pendencia is not None):
             definicoes.append(item)
         elif situacao.startswith(backlog.PREFIXO_ABERTA) and alvos_que_casam(
-            alvos, item.texto, citados.get(numero, set()), perfil
+            alvos, backlog.sem_causa(item.texto), citados.get(numero, set()), perfil
         ):
             pendencias.append(item)
     return Afetados(

@@ -1,5 +1,6 @@
 """Registro no ato (spec 4b, §10, e 4a, §9): Ruling, pendência e relato acrescentados no formato de cada arquivo, sem
-tirar nem alterar linha. O Ruling vai para o arquivo de decisões, a pendência para o arquivo de pendências, e o
+tirar linha. De uma linha que já existe, só mudam as células de status e de destino de uma pendência aberta (`nota`,
+`resolver_pendencia` e `trocar_destino`). O Ruling vai para o arquivo de decisões, a pendência para o arquivo de pendências, e o
 relato, ou o status dele, para a seção de informação nova do rascunho. Os registros do passo 7 (spec 6a, §5.1), a
 aprovação, a abordagem descartada e o trecho do rascunho processado, vão para as seções deles no arquivo de
 decisões."""
@@ -17,10 +18,11 @@ import comum
 from perfil import Perfil
 
 AJUDA = """\
-Acrescenta no ato um Ruling ao arquivo de decisões, uma pendência ao backlog.md, um relato ao rascunho ou um registro
-do passo 7.
+Acrescenta no ato um Ruling ao arquivo de decisões, uma pendência ao backlog.md, uma nota a uma pendência aberta, um
+relato ao rascunho ou um registro do passo 7.
 
-Nenhuma ação tira ou altera linha: a linha nova entra no fim da seção ou da tabela, com a quebra de linha do arquivo,
+Só o `registrar nota` muda uma linha que já existe, e só a célula de status; as outras ações não tiram nem
+alteram linha: a linha nova entra no fim da seção ou da tabela, com a quebra de linha do arquivo,
 e a saída diz onde. Recusa sai com 1 e `recusado: <motivo>`, sem gravar: texto vazio ou com quebra de linha, arquivo
 ausente ou ilegível, arquivo sem a seção ou a tabela.
 
@@ -29,12 +31,21 @@ ausente ou ilegível, arquivo sem a seção ou a tabela.
 Ruling mais recente.
 
 `registrar pendencia` grava a pendência aberta, com o número seguinte ao maior, como última linha da tabela de
-pendências do backlog.md, e imprime `<prefixo>-NN acrescentada em <arquivo>:<linha>`. Recusa também `|` no texto, na
-origem ou no destino, e IDs de pendência com erro, que vêm abaixo como no `harness.py backlog ids`.
+pendências do backlog.md, e imprime `<prefixo>-NN acrescentada em <arquivo>:<linha>`. O `--causa` é obrigatório, de
+uma lista fixa, e é gravado no fim da Origem. Recusa também `|` no texto, na origem ou no destino, e IDs de pendência
+com erro, que vêm abaixo como no `harness.py backlog ids`. Ela vem só de uma das três fontes da escada de
+`pendencias.md` do núcleo (a resposta "Abrir pendência", o pedido do usuário no modo revisão, o retorno do código);
+antes, a nota numa pendência aberta de mesmo destino.
+
+`registrar nota` acrescenta `; <AAAA-MM-DD>: <nota>` ao fim da célula de status de uma pendência aberta, sem mexer no
+resto da linha, e imprime `<prefixo>-NN anotada em <arquivo>:<linha>`. O ID casa pelo número, de modo que `<prefixo>-3`
+acha a `<prefixo>-03`. Recusa nota vazia, com quebra de linha ou com `|`, pendência fora do backlog ou que não está
+aberta, e IDs com erro. O que sobra noutro documento começa a nota por `resta em <documento>: `.
 
 ```text
 - <AAAA-MM-DD> Ruling: <decisão> — <por quê> — <custo se errado>.
-| <prefixo>-NN | <pendência> | <nome do arquivo de origem>, <AAAA-MM-DD> | <destino> | aberta |
+| <prefixo>-NN | <pendência> | <nome do arquivo de origem>, <AAAA-MM-DD>, causa: <causa> | <destino> | aberta |
+| <prefixo>-NN | ... | ... | <destino> | aberta; <AAAA-MM-DD>: <nota> |
 ```
 
 `registrar aprovacao`, `registrar descartada` e `registrar trecho` gravam a linha no fim da seção do arquivo de
@@ -169,16 +180,20 @@ def _ultima_da_tabela(linhas: list[str], pendencias: list[tuple[int, str, str]])
 
 
 def pendencia(
-    raiz: Path, perfil: Perfil, texto: str, origem: str, destino: str, hoje: str | None = None
+    raiz: Path, perfil: Perfil, texto: str, origem: str, destino: str, causa: str, hoje: str | None = None
 ) -> tuple[str, int]:
-    """Acrescenta `| <prefixo>-<NN> | <texto> | <nome do arquivo de origem>, <hoje> | <destino> | aberta |` depois da
+    """Acrescenta `| <prefixo>-<NN> | <texto> | <nome do arquivo de origem>, <hoje>, causa: <causa> | <destino> | aberta |`
+    depois da
     última linha da tabela de pendências, com o número seguinte ao maior, e devolve o ID e o número da linha nova.
 
     Recusa lança RegistroRecusado sem gravar: texto, origem ou destino vazio, com quebra de linha ou com `|`; IDs com
-    erro, os mesmos que `harness.py backlog ids` acusa, que vão nos detalhes; arquivo sem a tabela de pendências."""
+    erro, os mesmos que `harness.py backlog ids` acusa, que vão nos detalhes; arquivo sem a tabela de pendências. A causa
+    fora de `backlog.CAUSAS` também é recusada."""
     texto = _texto("pendência", texto, sem_barra=True)
     origem = _texto("--origem", origem, sem_barra=True)
     destino = _texto("--destino", destino, sem_barra=True)
+    if causa not in backlog.CAUSAS:
+        raise RegistroRecusado(f"--causa: {causa} não está na lista")
     hoje = hoje or datetime.date.today().isoformat()
     relativo = perfil.caminhos.backlog
     conteudo = _ler(raiz, relativo)
@@ -195,7 +210,8 @@ def pendencia(
     numero = max((int(id_.rsplit("-", 1)[1]) for _, id_, _ in pendencias), default=0) + 1
     id_ = f"{perfil.ids.prefixo_pendencia}-{numero:02d}"
     nome = posixpath.basename(origem.replace("\\", "/"))
-    nova = f"| {id_} | {texto} | {nome}, {hoje} | {destino} | {backlog.PREFIXO_ABERTA} |{_quebra(linhas[ultima])}"
+    nova = (f"| {id_} | {texto} | {nome}, {hoje}, causa: {causa} | {destino} | {backlog.PREFIXO_ABERTA} |"
+            f"{_quebra(linhas[ultima])}")
     linhas.insert(ultima + 1, nova)
     comum.escrever_texto(raiz / relativo, "\n".join(linhas))
     return id_, ultima + 2
@@ -218,10 +234,24 @@ def resolver_pendencia(
     hoje = hoje or datetime.date.today().isoformat()
     relativo = perfil.caminhos.backlog
     conteudo = _ler(raiz, relativo)
+    numero, id_, status = _pendencia_aberta(conteudo, perfil, id_, "resolver")
+    novo_status = f"resolvida em {posixpath.basename(normal)}, {hoje}: {como}"
+    if status.strip() != backlog.PREFIXO_ABERTA:
+        novo_status += f"; histórico: {status.strip()}"
+    linhas = conteudo.split("\n")
+    linhas[numero - 1] = _trocar_celulas(linhas[numero - 1], None, novo_status)
+    comum.escrever_texto(raiz / relativo, "\n".join(linhas))
+    return numero, id_
+
+
+def _pendencia_aberta(conteudo: str, perfil: Perfil, id_: str, acao: str) -> tuple[int, str, str]:
+    """Acha a pendência `id_` no backlog e devolve o número da linha dela (contado de 1), o ID como está no backlog
+    e o status. O `id_` casa pelo número, sem importar caixa nem zeros. Recusa IDs com erro (nos detalhes, com a
+    `acao` na mensagem), pendência fora do backlog e pendência que não está aberta."""
     erros = backlog.conferir_ids(conteudo, perfil)
     if erros:
         raise RegistroRecusado(
-            "os IDs das pendências têm erro; corrija antes de resolver (harness.py backlog ids)", tuple(erros)
+            f"os IDs das pendências têm erro; corrija antes de {acao} (harness.py backlog ids)", tuple(erros)
         )
     procurado = _numero_da_pendencia(id_, perfil)
     achada = next(((numero, outro, status) for numero, outro, status in backlog.linhas_de_pendencia(conteudo, perfil)
@@ -231,16 +261,66 @@ def resolver_pendencia(
     numero, id_, status = achada
     if not status.startswith(backlog.PREFIXO_ABERTA):
         raise RegistroRecusado(f"{id_} não está aberta: {status}")
-    linhas = conteudo.split("\n")
-    quebra = _quebra(linhas[numero - 1])
-    corpo = linhas[numero - 1].rstrip()
+    return numero, id_, status
+
+
+def _trocar_celulas(linha: str, destino: str | None, status: str) -> str:
+    """A linha da pendência com a célula de status trocada por `status` e, se `destino` não é None, a de destino
+    também. O resto fica igual: a quebra `\\r` do fim e a barra final, que só volta se a linha a tinha."""
+    quebra = _quebra(linha)
+    corpo = linha.rstrip()
     barra_final = corpo.endswith("|")
     if barra_final:
         corpo = corpo[:-1].rstrip()
-    novo_status = f"resolvida em {posixpath.basename(normal)}, {hoje}: {como}"
-    if status.strip() != backlog.PREFIXO_ABERTA:
-        novo_status += f"; histórico: {status.strip()}"
-    linhas[numero - 1] = f"{corpo[:corpo.rindex('|') + 1]} {novo_status}{' |' if barra_final else ''}{quebra}"
+    antes = corpo[:corpo.rindex("|") + 1]
+    if destino is not None:
+        antes = antes[:antes.rindex("|")]
+        antes = f"{antes[:antes.rindex('|') + 1]} {destino} |"
+    return f"{antes} {status}{' |' if barra_final else ''}{quebra}"
+
+
+def nota(raiz: Path, perfil: Perfil, id_: str, texto: str, hoje: str | None = None) -> tuple[int, str]:
+    """Acrescenta `<hoje>: <texto>` ao fim da célula de status da pendência aberta `id_`, depois de `; `, e devolve o
+    número da linha dela e o ID como está no backlog. O resto da linha fica igual.
+
+    Recusa lança RegistroRecusado sem gravar: `texto` vazio, com quebra de linha ou com `|`; IDs com erro, nos
+    detalhes; pendência fora do backlog ou que não está aberta."""
+    texto = _texto("nota", texto, sem_barra=True)
+    hoje = hoje or datetime.date.today().isoformat()
+    relativo = perfil.caminhos.backlog
+    conteudo = _ler(raiz, relativo)
+    numero, id_, status = _pendencia_aberta(conteudo, perfil, id_, "anotar")
+    linhas = conteudo.split("\n")
+    linhas[numero - 1] = _trocar_celulas(linhas[numero - 1], None, f"{status.strip()}; {hoje}: {texto}")
+    comum.escrever_texto(raiz / relativo, "\n".join(linhas))
+    return numero, id_
+
+
+def trocar_destino(raiz: Path, perfil: Perfil, id_: str, destino: str, hoje: str | None = None) -> tuple[int, str]:
+    """Troca a célula de destino da pendência aberta `id_` por `destino` e acrescenta `; <hoje>: destino era <antigo>`
+    ao fim do status. Devolve o número da linha dela e o ID como está no backlog. O `id_` casa pelo número, e o resto
+    da linha fica igual.
+
+    Recusa lança RegistroRecusado sem gravar: `destino` vazio, com quebra de linha ou com `|`; destino novo que perde
+    o marcador de um gate que o antigo tinha, sem distinção de maiúsculas; destino igual ao atual; linha sem a célula
+    de destino; IDs com erro, nos detalhes; pendência fora do backlog ou que não está aberta."""
+    destino = _texto("destino", destino, sem_barra=True)
+    hoje = hoje or datetime.date.today().isoformat()
+    relativo = perfil.caminhos.backlog
+    conteudo = _ler(raiz, relativo)
+    numero, id_, status = _pendencia_aberta(conteudo, perfil, id_, "trocar o destino")
+    linhas = conteudo.split("\n")
+    celulas = backlog.celulas(linhas[numero - 1])
+    if len(celulas) < 3:
+        raise RegistroRecusado(f"{id_} não tem a célula de destino")
+    antigo = celulas[-2]
+    if destino.strip() == antigo.strip():
+        raise RegistroRecusado("destino: igual ao atual")
+    for gate in perfil.gates.values():
+        marcador = gate.marcador_pendencia
+        if marcador.casefold() in antigo.casefold() and marcador.casefold() not in destino.casefold():
+            raise RegistroRecusado(f'o destino novo perde "{marcador}", que segura o {gate.nome}')
+    linhas[numero - 1] = _trocar_celulas(linhas[numero - 1], destino, f"{status.strip()}; {hoje}: destino era {antigo}")
     comum.escrever_texto(raiz / relativo, "\n".join(linhas))
     return numero, id_
 

@@ -29,6 +29,6 @@ Hoje: {AAAA-MM-DD}
 A pasta deles vem na linha "Relatórios de pesquisa" de "Este projeto".
 
 1. Retorno `DONE` ou `DONE_WITH_CONCERNS`: grave o relatório em `<pasta>/pesquisa-<primeiro documento sem .md>-<AAAA-MM-DD>/fatos.md`, com um cabeçalho de quatro linhas (`Pergunta:`, `Fontes lidas:`, `Data:`, `Status:`) e o relatório abaixo. `BLOCKED`: nada é gravado; diga ao usuário o que bloqueou.
-2. Fato que contradiz uma decisão registrada vira pendência, pelo registro no ato de [pacote.md](pacote.md).
+2. Fato que contradiz uma decisão registrada segue o registro no ato de [pacote.md](pacote.md): no documento do ciclo, pergunta; fora dele, a escada de `.claude/harness/nucleo/nucleo/planejamento/pendencias.md`.
 3. Os tokens, as chamadas e a duração do agente, lidos da notificação, entram por `harness.py registrar medicao "<medição>" "<valor>"`.
 4. O relatório entra no commit do documento ou do pacote (passo 7), e os dossiês seguintes o encontram.

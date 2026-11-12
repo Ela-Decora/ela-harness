@@ -91,7 +91,7 @@ Com `[passagem]` no perfil:
   `(na árvore principal)`; a falha do git dá `passagem não conferida: <motivo>`.
 - Retorno, só no comando: `gh issue list --label retorno --state open --limit 1000 --json number,title`, na raiz,
   com 10 s. A issue sem pendência, aberta ou resolvida, que cite `retorno #N` em qualquer célula vira
-  `retorno sem pendência: #N <título>; registre por harness.py registrar pendencia citando retorno #N`; a com
+  `retorno sem pendência: #N <título>; registre por harness.py registrar pendencia --causa codigo citando retorno #N`; a com
   pendência sai só no `--verbose`. A falha dá `retorno não consultado: <motivo>`: `gh indisponível: <motivo>`,
   `gh passou de 10 s`, a primeira linha do erro do `gh` ou `saída do gh ilegível`.
 """
@@ -592,7 +592,7 @@ def _retorno(f: _Fontes, executar) -> tuple[list[str], list[str]]:
             linhas.append(f"#{numero} {titulo}: {comum.juntar(citantes[numero])}")
         else:
             atencao.append(f"retorno sem pendência: #{numero} {titulo}; registre por harness.py registrar pendencia "
-                           f"citando retorno #{numero}")
+                           f"--causa codigo citando retorno #{numero}")
     return atencao, linhas
 
 

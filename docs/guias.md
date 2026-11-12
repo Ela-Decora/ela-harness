@@ -62,7 +62,7 @@ está em [`references/modo-revisao.md`](../skills/refinar-documento/references/m
 2. Sem pendência? Peça uma ([Registrar no ato](#registrar-no-ato)); o `harness.py proximo --verbose` lista as revisões.
 3. Chame `/ela-harness:refinar-documento <documento>`: no `aprovado`, o modo revisão parte da pendência ou do seu pedido.
 4. Só há entrevista se a pendência deixa decisão aberta; só os trechos afetados mudam; você confirma só as marcas novas.
-5. No passo 6, você vê o `git diff` contra a versão commitada; no 7, a pendência fecha e o documento volta a `aprovado`.
+5. No 6, o `git diff` contra o commit; no 7, o documento volta a `aprovado` e a pendência fecha ou vai ao que resta.
 
 **Se der errado:**
 - `Afetados por <alvo>: 0 linhas`: ninguém cita o alvo assim; tente o ID, a pendência ou outro termo.
@@ -151,12 +151,12 @@ está em [`references/entrevista.md`](../skills/refinar-documento/references/ent
 
 1. Decisão que vale além do documento: peça um Ruling. O `harness.py registrar ruling` grava o quê, o porquê e o custo
    se errado, e você vê `Ruling acrescentado em <arquivo>:<linha>`.
-2. Pergunta que fica aberta: peça uma pendência, com o destino que a resolve. O `harness.py registrar pendencia` imprime
-   `<prefixo>-NN acrescentada em <arquivo>:<linha>`.
+2. Pergunta que fica aberta: fica na conversa e, se sobrar, vira `[A CONFIRMAR]`; pendência nova só com o seu sim, e o
+   `harness.py registrar pendencia` imprime `<prefixo>-NN acrescentada em <arquivo>:<linha>`.
 3. Informação nova, que não responde ao documento, não é decisão nem pergunta e não está escrita: peça um relato. O
    `harness.py registrar relato` a guarda no rascunho, `confirmada` se você a afirmou.
 4. Decisão que muda outra vira Ruling novo, com `substitui o Ruling de <data>`, e nada se apaga. O `harness.py afetados`
-   acha os documentos `aprovado` que a citam, e cada um ganha uma pendência.
+   acha os `aprovado` que a citam, e cada um ganha uma nota `resta em`, pelo `harness.py registrar nota`.
 
 **Se der errado:**
 - `recusado: <motivo>`, sem gravar: tire a quebra de linha do texto, ou o `|` da pendência, da origem e do destino.
@@ -259,7 +259,7 @@ ou um termo do texto. As chaves e as regras estão em [perfil](referencia.md#per
 
 **Quando:** há diagramas Mermaid no planejamento ou, com `[der]` no perfil, o DDL. Na raiz, copie o workflow do plugin e commite:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Ela-Decora/ela-harness/v0.3.2/ci/planejamento/diagramas.yml -o .github/workflows/diagramas.yml
+curl -fsSL https://raw.githubusercontent.com/Ela-Decora/ela-harness/v0.4.0/ci/planejamento/diagramas.yml -o .github/workflows/diagramas.yml
 ```
 O check `diagramas` valida o Mermaid de `caminhos.planejamento` e, com `[der]`, o DDL num MySQL e num Postgres, pela `ref`
 do `.claude/settings.json`. O `harness.py gerar` reescreve o `harness.yml` inteiro: o CI a mais vai em workflow próprio.
@@ -272,7 +272,7 @@ vez por projeto, numa branch com PR ou, no planejamento sem PR, no ramo de traba
 1. Na raiz, troque o marketplace; os `install` devolvem os plugins que o `remove` tira, o último só no desenvolvimento:
    ```bash
    claude plugin marketplace remove ela-harness --scope project
-   claude plugin marketplace add Ela-Decora/ela-harness#v0.3.2 --scope project
+   claude plugin marketplace add Ela-Decora/ela-harness#v0.4.0 --scope project
    claude plugin install ela-harness@ela-harness --scope project
    claude plugin install ela-harness-papeis@ela-harness --scope project
    ```

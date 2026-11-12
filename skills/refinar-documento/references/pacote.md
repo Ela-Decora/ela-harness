@@ -16,7 +16,7 @@ Um pacote é um módulo com as entidades e telas que ele cria ou compõe (pacote
 
 ## Passos 1 a 5
 
-- Passo 1: uma mensagem para o pacote, no molde "Resumo do pacote" de `.claude/harness/nucleo/nucleo/comum/saida.md`, e uma chamada da ferramenta de opções com até três perguntas: `header` "Composição", "A composição do pacote confere?"; `header` "Resumo", "O resumo e os mapas conferem?"; e a fronteira do MVP, uma vez para o pacote, como [preparacao.md](preparacao.md) diz. No pacote em modo revisão, o resumo traz só a mudança pedida, e a fronteira não entra.
+- Passo 1: uma mensagem para o pacote, no molde "Resumo do pacote" de `.claude/harness/nucleo/nucleo/comum/saida.md`, e uma chamada da ferramenta de opções com até quatro perguntas: `header` "Composição", "A composição do pacote confere?"; `header` "Resumo", "O resumo e os mapas conferem?"; e a fronteira do MVP, uma vez para o pacote, como [preparacao.md](preparacao.md) diz. No pacote em modo revisão, as de escopo de [modo-revisao.md](modo-revisao.md) vêm primeiro, quando houver, uma vez para o pacote, e o que passa de quatro perguntas segue em chamada seguinte; o resumo traz só a mudança pedida, e a fronteira não entra.
 - Passo 2: a fronteira das decisões do pacote inteiro; a mesma decisão em dois documentos vira uma pergunta só. O `header` traz o termo do documento, e a `question`, o documento e a seção. Depois de cada rodada, o registro no ato (abaixo).
 - Passo 3: todos os documentos, na ordem da lista. Cada frase cita a fonte (ID, link, decisão com data, relatório de pesquisa) ou leva `[A CONFIRMAR: motivo]`.
 - Passo 4: `harness.py checar`, sem argumento, confere a lista. A confirmação dos marcadores do pacote vai em chamadas de até 4 perguntas, com o `header` no termo do documento.
@@ -28,7 +28,7 @@ Um pacote é um módulo com as entidades e telas que ele cria ou compõe (pacote
 
 - "aprovado": vale para o pacote apresentado; siga para o passo 7.
 - "mudar <documento>: <o quê>": `harness.py passo 3` antes de editar; edite só esse documento; `harness.py checar <documento>` e a confirmação dos marcadores novos dele; o revisor com `Escopo:` só nele; `harness.py passo 6` de novo, e só o hash dele muda. Ao reapresentar, a saída de `harness.py versao diff --documento <documento>` vem antes da mensagem fixa; os outros documentos não precisam ser relidos.
-- "tirar <documento> do pacote": a resposta vale como a autorização para `harness.py versao limpar`; depois, `harness.py estado set Pacote "<lista sem ele>" && harness.py passo 6 --proximo "<o que vem>"`. Ele fica fora da aprovação, com o status que o passo 5 deixou no backlog; se o usuário disser o motivo, registre uma pendência com destino nele. No pacote em modo revisão, ele volta ao HEAD: `git restore <documento>`, a linha dele na tabela de artefatos de volta a `aprovado` com a data anterior, e a pendência continua aberta, com destino nele. Sobrando um documento: `harness.py estado set Pacote — && harness.py estado set Documento <ele> && harness.py passo 6 --proximo "<o que vem>"`, para marcar de novo a versão do que ficou, e ele segue sozinho.
+- "tirar <documento> do pacote": a resposta vale como a autorização para `harness.py versao limpar`; depois, `harness.py estado set Pacote "<lista sem ele>" && harness.py passo 6 --proximo "<o que vem>"`. Ele fica fora da aprovação, com o status que o passo 5 deixou no backlog; se o usuário disser o motivo, ele sobe a escada de `.claude/harness/nucleo/nucleo/planejamento/pendencias.md`, valendo como o "Abrir pendência", com `--causa pedido`, quando nenhuma pendência aberta tem destino nele. No pacote em modo revisão, ele volta ao HEAD: `git restore <documento>`, a linha dele na tabela de artefatos de volta a `aprovado` com a data anterior, e a pendência continua aberta, com destino nele. Sobrando um documento: `harness.py estado set Pacote — && harness.py estado set Documento <ele> && harness.py passo 6 --proximo "<o que vem>"`, para marcar de novo a versão do que ficou, e ele segue sozinho.
 
 Aprovação parcial ("aprovo A e B") não existe: responda com as duas formas acima. Ao retomar no passo 6 ou 7, `harness.py versao conferir`, sem argumento, confere o pacote e diz qual documento divergiu.
 
@@ -38,13 +38,13 @@ Aprovação parcial ("aprovo A e B") não existe: responda com as duas formas ac
 
 ## Registro no ato, com ou sem pacote
 
-Decisões e pendências entram na hora, por comando, nunca por Edit:
+Rulings, notas e pendências entram na hora, por comando, nunca por Edit; notas e pendências seguem a escada de `.claude/harness/nucleo/nucleo/planejamento/pendencias.md`:
 
-- `harness.py registrar ruling "<o quê>" --por "<por quê>" --custo "<custo se errado>"`: a resposta que vale além do documento, depois de cada rodada da entrevista e de cada chamada da confirmação, pelo critério do passo 7.
-- `harness.py registrar pendencia "<texto>" --origem <documento> --destino "<destino>"`: a pergunta que fica aberta; e o fato do relatório de pesquisa que contradiz uma decisão registrada, com destino no documento que a usa.
-- A decisão que muda outra vira um Ruling novo, com "substitui o Ruling de <data>" no "o quê"; nada é apagado. Depois dele, `harness.py afetados` com os IDs e termos do Ruling, e uma pendência para cada documento `aprovado` da lista, com destino nele.
+- `harness.py registrar ruling "<o quê>" --por "<por quê>" --custo "<custo se errado>"`: a resposta que vale além do documento, depois de cada rodada da entrevista e de cada chamada da confirmação, pelo critério do passo 7. Depois dele, `harness.py afetados` com os IDs e termos do Ruling, e, para cada documento `aprovado` da lista fora do escopo, uma nota `resta em <documento>: <o quê>` pela escada, com `--causa cascata` se a resposta abrir pendência.
+- O fato do relatório de pesquisa que contradiz uma decisão registrada: no documento do ciclo, vira pergunta; fora dele, sobe a escada, com `--causa pesquisa` se a resposta abrir pendência. A pergunta que fica aberta fica na árvore.
+- A decisão que muda outra vira um Ruling novo, com "substitui o Ruling de <data>" no "o quê"; nada é apagado, e o `afetados` e as notas seguem o item do `registrar ruling`.
 
-O que vale só para o documento fica no texto dele. Recusa do `registrar`: corrija o texto (uma linha, sem `|` na pendência); com IDs de pendência em erro, diga ao usuário e pare.
+O que vale só para o documento fica no texto dele. Recusa do `registrar`: corrija o texto (uma linha, sem `|` na pendência e na nota); com IDs de pendência em erro, diga ao usuário e pare.
 
 ## Conferência de propagação
 

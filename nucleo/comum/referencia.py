@@ -102,7 +102,7 @@ CONCEITOS = (
     "o rascunho, depois as pastas de `caminhos.fontes`, na ordem do perfil. |\n"
     "| **`[A CONFIRMAR: motivo]`** | Marca de inferência do modelo. No passo 4, cada uma vira pergunta da ferramenta "
     "de opções: confirmada, a marca sai e o texto fica; \"tirar\", o trecho sai; corrigida, o trecho é reescrito "
-    "sem marca. Ficam de fora as que citam uma pendência ou \"pesquisa pendente\". O `checar` conta as marcas, mas "
+    "sem marca. Ficam de fora as que citam uma pendência, \"pesquisa pendente\" ou \"pergunta aberta\". O `checar` conta as marcas, mas "
     "não falha por elas. |\n"
     "| **Ruling** | Decisão que vale além de um documento, registrada no arquivo de decisões (`caminhos.decisoes`) "
     "como `Ruling: o quê — por quê — custo se errado`, por `harness.py registrar ruling`. |\n"
