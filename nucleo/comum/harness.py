@@ -21,6 +21,7 @@ import aceitacao
 import backlog
 import bloco
 import checar
+import ci
 import comum
 import contexto
 import der
@@ -68,8 +69,11 @@ fechamento = _do_planejamento("fechamento")
 gate = _do_planejamento("gate")
 passagem = _do_planejamento("passagem")
 passo = _do_planejamento("passo")
+lote = _do_planejamento("lote")
+migrar = _do_planejamento("migrar")
 proximo = _do_planejamento("proximo")
 rastreio = _do_planejamento("rastreio")
+resumo = _do_planejamento("resumo")
 referencia = _do_planejamento("referencia")
 registro = _do_planejamento("registro")
 sessao = _do_planejamento("sessao")
@@ -128,7 +132,7 @@ def _documentos_pedidos(raiz: Path, perfil: Perfil, argumentos: list[str]) -> li
     if argumentos:
         return list(dict.fromkeys(argumentos))
     try:
-        documentos = estado.documentos(estado.ler(raiz / perfil.caminhos.status, perfil))
+        documentos = estado.documentos(estado.ler(raiz / perfil.caminhos.status, perfil), raiz)
     except estado.EstadoInvalido as erro:
         print("STATUS.md inválido: " + _uma_linha(erro.mensagem))
         return None
@@ -171,10 +175,14 @@ def _comando_estado(args: argparse.Namespace) -> int:
 def _comando_estado_set(args: argparse.Namespace) -> int:
     """Muda um campo do STATUS.md. Recusado imprime o motivo, numa linha, e sai com 1; o arquivo fica intacto.
 
-    `Versao-aprovacao` não muda por aqui: só por `versao marcar`, `versao limpar`, `passo 6` ou `fechar`.
+    `Versao-aprovacao` não muda por aqui: só por `versao marcar`, `versao limpar`, `passo 6` ou `fechar`. O `Lote`
+    também não: só por `estado lote`, `migrar` ou `fechar`.
     """
     if args.campo == "Versao-aprovacao":
         print("recusado: Versao-aprovacao muda só por versao marcar, versao limpar, passo 6 ou fechar")
+        return 1
+    if args.campo == estado.CAMPO_LOTE:
+        print("recusado: Lote muda só por estado lote, migrar ou fechar")
         return 1
     raiz, perfil = _projeto()
     try:
@@ -185,6 +193,36 @@ def _comando_estado_set(args: argparse.Namespace) -> int:
     print(f"{args.campo} = {args.valor}")
     for campo, valor in automaticas.items():
         print(f"{campo} = {valor}")
+    return 0
+
+
+def _comando_estado_lote(args: argparse.Namespace) -> int:
+    """Abre o lote de uma pendência com os caminhos, na ordem do lote, ou, com `--tirar`, tira um documento do lote
+    aberto. Imprime o `Lote`, o `Documento` e a lista, um caminho por linha; a recusa imprime `recusado: <linha>`, uma por
+    linha, e sai com 1, sem gravar."""
+    raiz, perfil = _projeto()
+    pedidos = args.argumentos
+    de_pendencia = bool(pedidos) and registro._numero_da_pendencia(pedidos[0], perfil) is not None
+    if args.tirar and (len(pedidos) != 1 or de_pendencia) or not args.tirar and (len(pedidos) < 2 or not de_pendencia):
+        raise UsoInvalido("estado lote pede <prefixo>-NN e os caminhos, ou --tirar <caminho>")
+    caminho = raiz / perfil.caminhos.status
+    try:
+        if args.tirar:
+            estado.tirar_do_lote(caminho, raiz, pedidos[0], perfil)
+        else:
+            lote.abrir(raiz, perfil, pedidos[0], pedidos[1:])
+        dados = estado.ler(caminho, perfil)
+    except lote.LoteRecusado as erro:
+        for linha in erro.linhas:
+            print("recusado: " + _uma_linha(linha))
+        return 1
+    except estado.EstadoInvalido as erro:
+        print("recusado: " + _uma_linha(erro.mensagem))
+        return 1
+    print(f"{estado.CAMPO_LOTE} = {dados[estado.CAMPO_LOTE]}")
+    print(f"Documento = {dados['Documento']}")
+    for documento in estado.documentos(dados, raiz):
+        print(f"  {documento}")
     return 0
 
 
@@ -247,7 +285,7 @@ def _comando_backlog_destino(args: argparse.Namespace) -> int:
     nada."""
     raiz, perfil = _projeto()
     try:
-        linha, id_ = registro.trocar_destino(raiz, perfil, args.id, args.destino)
+        linha, id_ = registro.trocar_destino(raiz, perfil, args.id, args.destino, dispensa=args.dispensa)
     except registro.RegistroRecusado as erro:
         return _recusar_registro(erro)
     except OSError as erro:
@@ -387,6 +425,50 @@ def _comando_versao_limpar(args: argparse.Namespace) -> int:
     return 0
 
 
+def _comando_versao_resumo(args: argparse.Namespace) -> int:
+    """Imprime o esqueleto das mudanças dos documentos em refino contra o HEAD (ou a cópia marcada) e grava o diff de
+    cada camada para o revisor. Recusa imprime o motivo e sai com 1."""
+    raiz, perfil = _projeto()
+    try:
+        mudancas, diffs = resumo.esqueleto(raiz, perfil, args.desde_marcada)
+    except resumo.ResumoRecusado as erro:
+        print("recusado: " + _uma_linha(erro.mensagem))
+        return 1
+    except (estado.EstadoInvalido, OSError) as erro:
+        return _recusar_versao(erro)
+    if args.conferir is not None:
+        try:
+            texto = comum.ler_texto(Path(args.conferir))
+        except (OSError, UnicodeDecodeError) as erro:
+            print(f"recusado: {args.conferir} ilegível ({_uma_linha(getattr(erro, 'strerror', None) or str(erro))})")
+            return 1
+        conferido, mensagem = resumo.conferir(texto, mudancas)
+        print(mensagem)
+        return 0 if conferido else 1
+    if not mudancas:
+        print("nenhuma mudança contra " + ("a versão marcada" if args.desde_marcada else "o HEAD"))
+        return 0
+    sys.stdout.write(resumo.formatar_esqueleto(mudancas) + resumo.formatar_diffs(diffs))
+    return 0
+
+
+def _comando_versao_ver(args: argparse.Namespace) -> int:
+    """Mostra a seção alterada de número `n` do documento em refino, palavra a palavra, com a legenda dos IDs. Recusa
+    sai com 1; documento sem mudança, com 0."""
+    raiz, perfil = _projeto()
+    try:
+        sys.stdout.write(resumo.ver(raiz, perfil, args.documento, args.n, args.desde_marcada))
+    except resumo.SemMudancas as erro:
+        print(_uma_linha(erro.mensagem))
+        return 0
+    except resumo.ResumoRecusado as erro:
+        print("recusado: " + _uma_linha(erro.mensagem))
+        return 1
+    except (estado.EstadoInvalido, OSError) as erro:
+        return _recusar_versao(erro)
+    return 0
+
+
 def _comando_versao_historico(args: argparse.Namespace) -> int:
     """Lista as versões marcadas do documento (padrão: o do STATUS.md), com a contagem de linhas contra a anterior."""
     raiz, perfil = _projeto()
@@ -431,6 +513,26 @@ def _comando_passo(args: argparse.Namespace) -> int:
         print(f"backlog: {caminho} = {status} em {data}")
     if gravado.prova:
         print(f"prova: {gravado.prova}")
+    if gravado.decisao:
+        de, para = migrar.migracao_da_origem(estado.origem_do_lote(
+            estado.ler(raiz / perfil.caminhos.status, perfil)[estado.CAMPO_LOTE]))
+        print(f"decisões: {migrar.ORIGEM.format(de=de, para=para)} registrada em {gravado.decisao}")
+    return 0
+
+
+def _comando_migrar(args: argparse.Namespace) -> int:
+    """Migra os documentos aprovados para a forma da versão do plugin e abre o lote de migração, ou registra a migração.
+    Imprime as linhas do `migrar`; recusa sai com 1, sem gravar."""
+    raiz, perfil = _projeto()
+    try:
+        migrado = migrar.migrar(raiz, perfil, args.de, ci.versao_do_nucleo())
+    except migrar.MigracaoRecusada as erro:
+        print("recusado: " + _uma_linha(erro.mensagem))
+        return 1
+    except OSError as erro:
+        return _recusar_versao(erro)
+    for linha in migrado.linhas:
+        print(linha)
     return 0
 
 
@@ -482,8 +584,21 @@ def _comando_gate(args: argparse.Namespace) -> int:
 
 
 def _comando_legenda(args: argparse.Namespace) -> int:
-    """Gera a legenda pela cópia de trabalho e a grava; com `--check`, só compara. Recusa e diferença saem com 1."""
+    """Gera a legenda pela cópia de trabalho e a grava; com `--check`, só compara. Recusa e diferença saem com 1.
+
+    Com `--ids`, imprime o título de cada ID e o significado de cada sigla do texto, sem ler `caminhos.legenda`; com
+    `--ids-de`, o mesmo para o texto do arquivo."""
     raiz, perfil = _projeto()
+    if args.ids_de is not None:
+        try:
+            args.ids = comum.ler_texto(Path(args.ids_de))
+        except (OSError, UnicodeDecodeError) as erro:
+            print(f"recusado: {args.ids_de} ilegível ({_uma_linha(getattr(erro, 'strerror', None) or str(erro))})")
+            return 1
+    if args.ids is not None:
+        for linha in legenda.legendar(args.ids, comum.leitor_do_disco(raiz), perfil):
+            print(linha)
+        return 0
     caminho = perfil.caminhos.legenda
     if not caminho:
         print("erro: perfil sem caminhos.legenda")
@@ -1015,7 +1130,12 @@ def _comando_afetados(args: argparse.Namespace) -> int:
     except rastreio.PendenciaForaDoBacklog as erro:
         print("recusado: " + _uma_linha(erro.mensagem))
         return 1
-    sys.stdout.write(rastreio.formatar_afetados(resultado, args.verbose))
+    saida = rastreio.formatar_afetados(resultado, args.verbose)
+    sys.stdout.write(saida)
+    if args.gravar:
+        caminho = dossie.ARQUIVO_AFETADOS
+        comum.escrever_texto(raiz / caminho, saida)
+        print(f"Gravado: {caminho}")
     return 0
 
 
@@ -1533,6 +1653,14 @@ def _montar_parser(trilha: str = perfil_comum.PLANEJAMENTO) -> argparse.Argument
     p_set.add_argument("valor", help="o valor novo, numa linha")
     p_set.set_defaults(funcao=_comando_estado_set)
 
+    p_lote = _nova_acao(
+        acoes, "lote", "abre o lote de uma pendência com os documentos que o destino cita, ou tira um dele"
+    )
+    p_lote.add_argument("argumentos", nargs="*", metavar="argumento",
+                        help="<prefixo>-NN e os caminhos dos documentos; com --tirar, só o caminho a tirar")
+    p_lote.add_argument("--tirar", action="store_true", help="tira o documento do lote aberto")
+    p_lote.set_defaults(funcao=_comando_estado_lote)
+
     p_backlog = subcomandos.add_parser(
         "backlog",
         help="confere o backlog do planejamento, conta as causas, resolve uma pendência ou troca o destino dela",
@@ -1555,6 +1683,10 @@ def _montar_parser(trilha: str = perfil_comum.PLANEJAMENTO) -> argparse.Argument
     p_destino.add_argument("id", metavar="pendência", help="o ID, como <prefixo>-NN")
     p_destino.add_argument(
         "destino", help="o destino novo: os documentos que restam, com os marcadores do antigo"
+    )
+    p_destino.add_argument(
+        "--dispensa", metavar="motivo",
+        help="o motivo da dispensa do gate, quando o destino novo perde o marcador dele; sem |",
     )
     p_destino.set_defaults(funcao=_comando_backlog_destino)
 
@@ -1586,6 +1718,9 @@ def _montar_parser(trilha: str = perfil_comum.PLANEJAMENTO) -> argparse.Argument
         "alvos", nargs="+", metavar="alvo", help="um ID de requisito ou de pendência, ou um termo entre aspas"
     )
     p_afetados.add_argument("--verbose", action="store_true", help="mostra todas as linhas, com o trecho")
+    p_afetados.add_argument(
+        "--gravar", action="store_true", help="grava a saída em .claude/harness/dossie/afetados.txt, para o revisor"
+    )
     p_afetados.set_defaults(funcao=_comando_afetados)
 
     p_registrar = subcomandos.add_parser(
@@ -1657,6 +1792,16 @@ def _montar_parser(trilha: str = perfil_comum.PLANEJAMENTO) -> argparse.Argument
     p_passo.add_argument("--rodada", type=int, help="a rodada; sem ela, 1 nos passos 2 e 5 e 0 nos outros")
     p_passo.set_defaults(funcao=_comando_passo)
 
+    p_migrar = subcomandos.add_parser(
+        "migrar", help="migra os documentos aprovados para a forma da versão do plugin e abre o lote de migração",
+        description=migrar.AJUDA,
+    )
+    p_migrar.add_argument(
+        "--de", metavar="versão",
+        help="a versão de partida, como v0.4.0; sem ela, a da última migração registrada no arquivo de decisões",
+    )
+    p_migrar.set_defaults(funcao=_comando_migrar)
+
     p_molde = subcomandos.add_parser(
         "molde", help="imprime o molde de um documento de planejamento", description=checar.AJUDA_MOLDE
     )
@@ -1695,6 +1840,21 @@ def _montar_parser(trilha: str = perfil_comum.PLANEJAMENTO) -> argparse.Argument
     p_conferir.set_defaults(funcao=_comando_versao_conferir)
     p_limpar = _nova_acao(acoes_versao, "limpar", "desfaz a marcação e apaga a cópia e o histórico")
     p_limpar.set_defaults(funcao=_comando_versao_limpar)
+    p_resumo = _nova_acao(
+        acoes_versao, "resumo", "dá o esqueleto das mudanças contra o HEAD e grava o diff de cada camada"
+    )
+    p_resumo.add_argument(
+        "--desde-marcada", action="store_true", help="compara com a cópia marcada, não com o HEAD"
+    )
+    p_resumo.add_argument(
+        "--conferir", metavar="<arquivo>", help="confere as linhas Onde: do resumo escrito contra as seções que mudaram"
+    )
+    p_resumo.set_defaults(funcao=_comando_versao_resumo)
+    p_ver = _nova_acao(acoes_versao, "ver", "mostra uma seção alterada do documento em refino, palavra a palavra")
+    p_ver.add_argument("documento", help="nome ou caminho do documento em refino")
+    p_ver.add_argument("n", type=int, nargs="?", default=1, help="número da seção alterada; padrão: 1")
+    p_ver.add_argument("--desde-marcada", action="store_true", help="compara com a cópia marcada, não com o HEAD")
+    p_ver.set_defaults(funcao=_comando_versao_ver)
     p_historico = _nova_acao(acoes_versao, "historico", "lista as versões marcadas do documento")
     p_historico.add_argument("documento", nargs="?", help="caminho do documento; padrão: o Documento do STATUS.md")
     p_historico.set_defaults(funcao=_comando_versao_historico)
@@ -1724,8 +1884,15 @@ def _montar_parser(trilha: str = perfil_comum.PLANEJAMENTO) -> argparse.Argument
         "legenda", help="gera a legenda das siglas e dos tipos de ID a partir dos documentos",
         description=legenda.AJUDA,
     )
-    p_legenda.add_argument(
+    opcoes_da_legenda = p_legenda.add_mutually_exclusive_group()
+    opcoes_da_legenda.add_argument(
         "--check", action="store_true", help="só compara com o arquivo e sai com 1 se diferir"
+    )
+    opcoes_da_legenda.add_argument(
+        "--ids", metavar="<texto>", help="imprime o título de cada ID e o significado de cada sigla do texto"
+    )
+    opcoes_da_legenda.add_argument(
+        "--ids-de", metavar="<arquivo>", help="o mesmo que --ids, com o texto lido do arquivo"
     )
     p_legenda.set_defaults(funcao=_comando_legenda)
 
@@ -1816,6 +1983,9 @@ def principal(argv: list[str] | None = None) -> int:
         return 1
     try:
         return args.funcao(args)
+    except UsoInvalido as erro:
+        print("uso inválido: " + _uma_linha(" ".join(str(erro).split())))
+        return 1
     except comum.RaizNaoEncontrada as erro:
         print(f"erro: {erro}")
         return 1

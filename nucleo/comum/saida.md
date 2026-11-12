@@ -1,6 +1,6 @@
 # Moldes de saída do harness
 
-Formato do que o usuário lê no chat: o resumo do pacote, a rodada da entrevista, o relato da revisão, a mensagem de aprovação do pacote, a proposta de módulos, a entrega da geração, o checklist do gate, o parecer do assessor, a linha do início da sessão e o próximo passo. O passo que produz uma dessas saídas lê este arquivo na hora de escrever. Vale mesmo com o modo caveman ligado.
+Formato do que o usuário lê no chat: o resumo do pacote, o resumo do lote, o resumo das mudanças, a rodada da entrevista, o relato da revisão, a mensagem de aprovação do pacote, a mensagem de aprovação do lote, a proposta de módulos, a entrega da geração, o checklist do gate, o parecer do assessor, a linha do início da sessão e o próximo passo. O passo que produz uma dessas saídas lê este arquivo na hora de escrever. Vale mesmo com o modo caveman ligado.
 
 ## Regras comuns
 
@@ -11,6 +11,8 @@ Formato do que o usuário lê no chat: o resumo do pacote, a rodada da entrevist
 5. Rótulos em minúsculas e sempre os mesmos: `bloqueia`, `atenção`, `sugestão`. Vêm do achado: BLOQUEIA, ATENÇÃO e SUGESTÃO.
 6. Todo recusado traz o motivo: `Ruling AAAA-MM-DD`, `fora do escopo da <pendência>`, `contradiz decisão sua` ou `fora da camada`.
 7. Sem emoji. Negrito só em onde, nos títulos de grupo e na opção recomendada.
+8. Na primeira aparição na mensagem, cada ID e cada sigla vêm com o título ou o significado entre parênteses, pela saída de `harness.py legenda --ids`.
+9. Uma ideia por frase; uma frase por linha nos itens.
 
 ## Resumo do pacote
 
@@ -33,7 +35,50 @@ Entram: <documento> (<seção do módulo que o cria>), …
 Ficam de fora: <documento linkado> (<motivo>), … ou "nada"
 ```
 
-As seções com fonte saem do mapa de cada documento; "Falta decidir" lista os temas da fronteira da entrevista. O que vier do rascunho ou de resposta anterior do usuário entra no mapa, não em "O que eu inferi".
+As seções com fonte saem do mapa de cada documento; "Falta decidir" lista os temas da fronteira da entrevista. O que vier do rascunho ou de resposta anterior do usuário entra no mapa, não em "O que eu inferi". Os IDs e as siglas do resumo levam a legenda (regra 8).
+
+## Resumo do lote
+
+Passo 1 de um lote, antes da chamada da ferramenta de opções, no lugar do resumo do pacote. As camadas e a trava vêm do `harness.py afetados`.
+
+```
+**Lote <prefixo>-NN (<título da pendência>) · <N> documentos, camadas <a> a <b>** — <d> decisões para você
+**Escopo:** <a mudança pedida, em uma frase>
+
+**Camada <n>**
+- <documento> · <seções afetadas>
+- <documento> · <seções afetadas>
+
+**Camada <n+1>**
+- <documento> · <seções afetadas>
+
+**Ficam de fora (<k>)**
+- <documento> · <motivo: vira nota, resta em <destino>>
+```
+
+O grupo "Ficam de fora" traz o documento que o `afetados` achou fora do destino, com o motivo `vira nota resta em <destino>`; sem nenhum, o grupo não aparece. Cada decisão para o usuário segue o molde da rodada da entrevista.
+
+## Resumo das mudanças
+
+Arquivo que o modelo escreve em `.harness-aprovacao/resumo.md`, a partir do esqueleto de `harness.py versao resumo`, e mostra ao usuário no passo da aprovação, do pacote e do lote. Uma entrada por mudança, não por seção.
+
+```
+**<Lote <prefixo>-NN | Revisão <documento>> · <M> mudanças em <N> documentos**
+
+**1. <o que mudou, uma frase>**
+Na prática: <o efeito para quem usa o sistema, uma frase>
+Onde: <documento> · <seção>; <documento> · <seção>
+
+**2. <o que mudou, uma frase>**
+Na prática: <o efeito, uma frase>
+Onde: <documento> · novo
+```
+
+- A linha `Onde:` fica sozinha na linha, sem marcador de lista e sem negrito: é a que o `harness.py versao resumo --conferir <arquivo>` lê. A seção é o título que o esqueleto traz, sem o ` · alterada (+n −m)`, o ` · nova` ou o ` · removida` que vêm depois dele, e o documento novo como `<documento> · novo`.
+- A mesma mudança em vários documentos é uma entrada, com todos no `Onde:`.
+- Uma frase por linha, sem repetir o título da seção na frase.
+- Cada ID e cada sigla vêm com a legenda na primeira aparição (regra 8).
+- Rode `harness.py versao resumo --conferir <arquivo>` até o `OK:` antes de mostrar o resumo; o `FALTA:` e o `SOBRA:` pedem a entrada ou a linha que ficou errada.
 
 ## Rodada da entrevista
 
@@ -65,7 +110,9 @@ A opção recomendada fica no lugar dela na lista, em negrito, com "← recomend
 
 **Para você (<v>)**
 1. **<onde>** · <rótulo>
-   <problema em uma frase>. <decisão pedida>
+   <problema em uma frase>
+   - **a) <opção> ← recomendo:** <motivo>
+   - b) <opção>
 
 **Corrigidos (<c>)**
 - **<onde>** · <rótulo>
@@ -76,7 +123,13 @@ A opção recomendada fica no lugar dela na lista, em negrito, com "← recomend
   <o que o achado pedia> → <motivo>
 ```
 
-Sem achados: `**Revisão · rodada <n>** — sem lacunas.` Na rodada 2, o resumo vira `<A> achados anteriores: <a> resolvidos, <b> não resolvidos; <N> novos`, e os não resolvidos entram em "Para você" ou "Recusados". Os itens de "Para você" são numerados para a resposta curta ("1: administrador"). A linha "Não verificável" do revisor, quando houver, entra em "Para você". Num pacote, o onde começa pelo nome do documento (`<documento> · <seção>`), e os achados entre documentos levam `pacote` no lugar dele.
+Sem achados: `**Revisão · rodada <n>** — sem lacunas.` Na rodada 2, o resumo vira `<A> achados anteriores: <a> resolvidos, <b> não resolvidos; <N> novos`, e os não resolvidos entram em "Para você" ou "Recusados". Os itens de "Para você" são numerados para a resposta curta ("1: administrador", ou "1a"); cada um traz as opções, e a recomendada fica em negrito, com "← recomendo:".
+
+- Os títulos dos grupos são estes três, com estas palavras: "Para você", "Corrigidos" e "Recusados". A primeira linha usa o travessão e as mesmas palavras.
+- O rótulo é só uma das três palavras da regra 5; o tipo do problema vai na linha de baixo, nunca no lugar do rótulo.
+- Cada linha "Não verificável" do revisor é um item de "Para você", com o rótulo `atenção`, e conta no `<v>` e no `<N>`; a primeira linha não traz contagem à parte.
+- O "Para você" vai sempre no molde, mesmo com um item só, nunca resumido numa frase corrida.
+- Num pacote, o onde começa pelo nome do documento (`<documento> · <seção>`), e os achados entre documentos levam `pacote` no lugar dele; num lote, `lote`.
 
 ## Mensagem de aprovação do pacote
 
@@ -86,11 +139,26 @@ Passo 6 de um pacote, depois do `harness.py passo 6`. A aprovação é a palavra
 Pacote `<nome do primeiro documento>` refinado: <N> documentos.
 - `<caminho>`: <s> seções, <m> `[A CONFIRMAR]` (<seção de cada um>)
 - `<caminho>`: <s> seções, <m> `[A CONFIRMAR]` (<seção de cada um>)
-Revisão do subagente: <veredito>, <K> rodada(s). Pesquisa pendente: <documento · seção>, ….
-Revise os arquivos e responda "aprovado", "mudar <documento>: <o quê>" ou "tirar <documento> do pacote". A aprovação vale só para os <N> documentos listados, não para o próximo pacote nem para o gate da camada.
+Revisão do subagente: <veredito>, <K> rodada(s).
+Pesquisa pendente: <documento · seção>, ….
+Revise os arquivos e responda "aprovado", "mudar <documento>: <o quê>" ou "tirar <documento> do pacote".
+A aprovação vale só para os <N> documentos listados, não para o próximo pacote nem para o gate da camada.
 ```
 
-A frase "Pesquisa pendente" só entra quando alguma seção tem `[A CONFIRMAR: pesquisa pendente]`. Depois de um "mudar", a saída de `harness.py versao diff --documento <documento>` vem antes da mensagem.
+A frase "Pesquisa pendente" só entra quando alguma seção tem `[A CONFIRMAR: pesquisa pendente]`. Depois de um "mudar", o resumo de `harness.py versao resumo --desde-marcada` vem antes da mensagem.
+
+## Mensagem de aprovação do lote
+
+Passo 6 de um lote, depois do `harness.py passo 6`. A aprovação é a palavra do usuário escrita no chat, nunca uma opção da ferramenta de opções.
+
+```
+Lote <prefixo>-NN (<título da pendência>) revisado: <N> documentos em <c> camadas.
+Revisão do subagente: <veredito>, <K> rodada(s) por camada.
+Responda "aprovado", "mudar <documento>: <o quê>", "tirar <documento> do lote" ou "ver <documento>", para o diff seção por seção.
+A aprovação vale só para os <N> documentos deste lote.
+```
+
+O resumo das mudanças vem antes da mensagem. O "ver <documento>" roda `harness.py versao ver <documento>`. Depois de um "mudar", o resumo de `harness.py versao resumo --desde-marcada` vem antes da mensagem.
 
 ## Proposta de módulos
 

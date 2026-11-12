@@ -27,7 +27,14 @@ Decisões: {caminho do arquivo de decisões}
 Cheiros de ambiguidade: .claude/harness/nucleo/skills/refinar-documento/references/cheiros-de-ambiguidade.md
 ```
 
-No modo revisão, acrescente a linha `Escopo: {os trechos alterados e o texto da pendência}`.
+No modo revisão, o documento não vai inteiro para o revisor: acrescente as quatro linhas abaixo, que o `harness.py versao resumo` e o `harness.py afetados <ID> "<termo>" --gravar` preparam. O agente lê o diff e, do documento, só a seção de cada trecho.
+
+```
+Diff: {.claude/harness/dossie/diff-camada-<N>.diff, que o versao resumo grava}
+Afetados: {.claude/harness/dossie/afetados.txt, que o afetados do passo 0 grava}
+Escopo: {o texto da pendência, com as notas}
+Critério: conteúdo
+```
 
 ## Rodada 2
 
@@ -48,7 +55,7 @@ Escopo: {os trechos alterados desde a rodada 1}
 
 ## Pacote
 
-Um despacho para o pacote inteiro, com a lista `Documentos:` no lugar do `Documento:`. A rodada 2 traz só os documentos que a correção da rodada 1 reescreveu numa seção ou em que acrescentou ID ou regra, cada um com o seu `Escopo:`. No "mudar <documento>" do passo 6, o despacho é o de documento sozinho, rodada 1, com `Escopo:` dos trechos alterados. No pacote em modo revisão, a rodada 1 também traz um `Escopo:` por documento, e o `Módulo de origem` é "não há".
+Um despacho para o pacote inteiro, com a lista `Documentos:` no lugar do `Documento:`. A rodada 2 traz só os documentos que a correção da rodada 1 reescreveu numa seção ou em que acrescentou ID ou regra, cada um com o seu `Escopo:`. No "mudar <documento>" do passo 6, o despacho é o de documento sozinho, rodada 1, com `Escopo:` dos trechos alterados.
 
 ```
 Rodada: 1
@@ -77,3 +84,24 @@ Decisões: {caminho do arquivo de decisões}
 Cheiros de ambiguidade: .claude/harness/nucleo/skills/refinar-documento/references/cheiros-de-ambiguidade.md
 Achados anteriores: {lista numerada, uma linha cada, com o documento de cada achado}
 ```
+
+## Lote
+
+Um despacho por camada do lote, todos em paralelo e em segundo plano, cada um com o diff só da camada dele ([lote.md](lote.md)). A lista `Documentos:` traz só os documentos da camada. A rodada 2 de uma camada traz os `Achados anteriores:` dela e o `Diff:` atualizado.
+
+```
+Rodada: 1
+Documentos:
+- {caminho} (molde: {o caminho que harness.py molde imprime}; princípios: {o arquivo, ou "não há"})
+Diff: {.claude/harness/dossie/diff-camada-<N>.diff, que o versao resumo grava}
+Afetados: {.claude/harness/dossie/afetados.txt, que o afetados do passo 0 grava}
+Escopo: {o texto da pendência, com as notas, ou "migração v<de>→v<para>"}
+Critério: {"conteúdo", ou "forma" no lote de migração}
+Camada: {a fase}
+Regra da camada: {a regra dessa fase, como está em "Este projeto"}
+Sistemas do cliente: {a lista de "Este projeto", ou "nenhum"}
+Decisões: {caminho do arquivo de decisões}
+Cheiros de ambiguidade: .claude/harness/nucleo/skills/refinar-documento/references/cheiros-de-ambiguidade.md
+```
+
+No lote de migração não há `afetados` do passo 0: deixe a linha `Afetados:` de fora. O `Critério: forma` e o `Escopo: migração v<de>→v<para>` trocam o critério de conteúdo pelo de forma, como o agente diz.

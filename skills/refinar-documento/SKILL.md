@@ -37,7 +37,7 @@ Três regras sem exceção: só o usuário aprova (passo 6), com a palavra dele 
 
 Ferramenta de opções: a resposta livre ("Other") nem sempre chega com o texto. Opção que pede texto, como "Corrigir" ou "Há tema fora", ou "Other" sem texto: peça o texto no chat, em uma linha, e espere a resposta antes de seguir.
 
-O `STATUS.md` é a única memória que sobra depois de `/clear` ou de compactar. Ao fechar cada passo, grave-o com `harness.py passo <passo seguinte> --proximo "<o que vem>"`; rodada nova, com `--rodada <r>`. O `passo` grava também o status do artefato no backlog. `estado set` fica para `Documento`, `Pacote`, `Fase`, os gates e a espera do commit no `Proximo`. Comandos encadeados por `&&` numa chamada só, nunca em chamadas paralelas; nos exemplos, `harness.py` abrevia `python3 .claude/harness/harness.py`. Texto que começa com `-` vai com `=`: `--proximo=-texto`.
+O `STATUS.md` é a única memória que sobra depois de `/clear` ou de compactar. Ao fechar cada passo, grave-o com `harness.py passo <passo seguinte> --proximo "<o que vem>"`; rodada nova, com `--rodada <r>`. O `passo` grava também o status do artefato no backlog. `estado set` fica para `Documento`, `Pacote`, `Fase`, os gates e a espera do commit no `Proximo`. Comandos encadeados por `&&` numa chamada só, nunca em chamadas paralelas; nos exemplos, `harness.py` abrevia `python3 .claude/harness/harness.py`, que vai escrito por inteiro em cada comando, sem variável nem `$(...)`: a permissão casa pelo começo do comando. Texto que começa com `-` vai com `=`: `--proximo=-texto`.
 
 Dúvida que muda o escopo ou a ideia principal (a lista de "Este projeto"): pare e pergunte antes de escrever. Dúvida menor: escreva e marque `[A CONFIRMAR: motivo]`.
 
@@ -49,11 +49,11 @@ Cada passo tem aqui um resumo. O detalhe está no arquivo de `references/` indic
 
 ## Passo 0: preparação
 
-Grave o alvo com `harness.py estado set Documento <alvo> && harness.py passo 0 --proximo "<o que vem>"`; num pacote, no lugar dele, `estado set Pacote "<lista>"`. Arquivo ausente vem do molde que `harness.py molde <alvo>` aponta; alvo com status `aprovado` na tabela de artefatos abre o modo revisão, menos o módulo aprovado com derivados em rascunho, que abre o pacote deles ([references/pacote.md](references/pacote.md)), como o `harness.py proximo` já indica. `harness.py dossie` grava as fontes num arquivo: leia o molde, o alvo, o dossiê e só as linhas do rascunho e dos relatórios que ele aponta, e monte o mapa "seção do molde → fonte". Fato que nenhuma fonte responde vai para o `ela-harness:pesquisador-fatos`. Leia [references/preparacao.md](references/preparacao.md).
+Grave o alvo com `harness.py estado set Documento <alvo> && harness.py passo 0 --proximo "<o que vem>"`; num pacote, no lugar dele, `estado set Pacote "<lista>"`. Arquivo ausente vem do molde que `harness.py molde <alvo>` aponta; alvo com status `aprovado` na tabela de artefatos abre o modo revisão, menos o módulo aprovado com derivados em rascunho, que abre o pacote deles ([references/pacote.md](references/pacote.md)), como o `harness.py proximo` já indica; a pendência com destino em dois ou mais aprovados abre o lote ([references/lote.md](references/lote.md)). `harness.py dossie` grava as fontes num arquivo: leia o molde, o alvo, o dossiê e só as linhas do rascunho e dos relatórios que ele aponta, e monte o mapa "seção do molde → fonte". Fato que nenhuma fonte responde vai para o `ela-harness:pesquisador-fatos`. Leia [references/preparacao.md](references/preparacao.md).
 
 ## Passo 1: entendimento devolvido
 
-"O que você disse", "O que eu inferi", a tabela do mapa e a lista de temas. A conferência do resumo e a fronteira do MVP vão numa chamada da ferramenta de opções quando "Este projeto" traz a fronteira da camada; senão, em texto, com a pergunta fixa. Num pacote, o molde "Resumo do pacote" e a pergunta da composição. Leia [references/preparacao.md](references/preparacao.md).
+"O que você disse", "O que eu inferi", a tabela do mapa e a lista de temas. A conferência do resumo e a fronteira do MVP vão numa chamada da ferramenta de opções quando "Este projeto" traz a fronteira da camada; senão, em texto, com a pergunta fixa. Num pacote, o molde "Resumo do pacote" e a pergunta da composição; num lote, o molde "Resumo do lote". Leia [references/preparacao.md](references/preparacao.md).
 
 ## Passo 2: entrevista em rodadas
 

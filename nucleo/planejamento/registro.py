@@ -15,6 +15,8 @@ from pathlib import Path
 
 import backlog
 import comum
+import estado
+import lote
 from perfil import Perfil
 
 AJUDA = """\
@@ -40,7 +42,8 @@ antes, a nota numa pendência aberta de mesmo destino.
 `registrar nota` acrescenta `; <AAAA-MM-DD>: <nota>` ao fim da célula de status de uma pendência aberta, sem mexer no
 resto da linha, e imprime `<prefixo>-NN anotada em <arquivo>:<linha>`. O ID casa pelo número, de modo que `<prefixo>-3`
 acha a `<prefixo>-03`. Recusa nota vazia, com quebra de linha ou com `|`, pendência fora do backlog ou que não está
-aberta, e IDs com erro. O que sobra noutro documento começa a nota por `resta em <documento>: `.
+aberta, e IDs com erro. O que sobra noutro documento começa a nota por `resta em <documento>: `. A nota `resta em <documento>` de um documento do lote
+aberto é recusada: o que resta dele se resolve no ciclo.
 
 ```text
 - <AAAA-MM-DD> Ruling: <decisão> — <por quê> — <custo se errado>.
@@ -279,32 +282,67 @@ def _trocar_celulas(linha: str, destino: str | None, status: str) -> str:
     return f"{antes} {status}{' |' if barra_final else ''}{quebra}"
 
 
+def _documentos_do_lote(raiz: Path, perfil: Perfil) -> list[str]:
+    """Os documentos do lote aberto, na ordem dele. Vazio sem `Lote` e com o STATUS.md ou a lista inválidos: nesse caso
+    a trava do lote não vale."""
+    try:
+        dados = estado.ler(raiz / perfil.caminhos.status, perfil)
+        if estado.CAMPO_LOTE not in dados:
+            return []
+        return estado.documentos(dados, raiz)
+    except (estado.EstadoInvalido, OSError):
+        return []
+
+
+def _recusa_do_lote(documento: str) -> RegistroRecusado:
+    return RegistroRecusado(f"{posixpath.basename(documento)} está no lote aberto; o que resta dele se resolve neste ciclo")
+
+
+_RE_RESTA_EM = re.compile(r"resta em `?([^\s:`]+\.md)`?")
+
+
 def nota(raiz: Path, perfil: Perfil, id_: str, texto: str, hoje: str | None = None) -> tuple[int, str]:
     """Acrescenta `<hoje>: <texto>` ao fim da célula de status da pendência aberta `id_`, depois de `; `, e devolve o
     número da linha dela e o ID como está no backlog. O resto da linha fica igual.
 
     Recusa lança RegistroRecusado sem gravar: `texto` vazio, com quebra de linha ou com `|`; IDs com erro, nos
-    detalhes; pendência fora do backlog ou que não está aberta."""
+    detalhes; pendência fora do backlog ou que não está aberta; nota `resta em <documento>` de um documento do lote
+    aberto."""
     texto = _texto("nota", texto, sem_barra=True)
     hoje = hoje or datetime.date.today().isoformat()
     relativo = perfil.caminhos.backlog
     conteudo = _ler(raiz, relativo)
     numero, id_, status = _pendencia_aberta(conteudo, perfil, id_, "anotar")
+    achado = _RE_RESTA_EM.match(texto) if texto.startswith("resta em ") else None
+    if achado:
+        nome = achado.group(1)
+        for documento in _documentos_do_lote(raiz, perfil):
+            if posixpath.basename(documento) == posixpath.basename(nome):
+                raise _recusa_do_lote(documento)
     linhas = conteudo.split("\n")
     linhas[numero - 1] = _trocar_celulas(linhas[numero - 1], None, f"{status.strip()}; {hoje}: {texto}")
     comum.escrever_texto(raiz / relativo, "\n".join(linhas))
     return numero, id_
 
 
-def trocar_destino(raiz: Path, perfil: Perfil, id_: str, destino: str, hoje: str | None = None) -> tuple[int, str]:
+def trocar_destino(
+    raiz: Path, perfil: Perfil, id_: str, destino: str, hoje: str | None = None, dispensa: str | None = None
+) -> tuple[int, str]:
     """Troca a célula de destino da pendência aberta `id_` por `destino` e acrescenta `; <hoje>: destino era <antigo>`
     ao fim do status. Devolve o número da linha dela e o ID como está no backlog. O `id_` casa pelo número, e o resto
     da linha fica igual.
 
     Recusa lança RegistroRecusado sem gravar: `destino` vazio, com quebra de linha ou com `|`; destino novo que perde
     o marcador de um gate que o antigo tinha, sem distinção de maiúsculas; destino igual ao atual; linha sem a célula
-    de destino; IDs com erro, nos detalhes; pendência fora do backlog ou que não está aberta."""
+    de destino; IDs com erro, nos detalhes; pendência fora do backlog ou que não está aberta; destino novo que cita um
+    documento do lote aberto (o primeiro, na ordem do lote).
+
+    Com `dispensa` (o motivo, sem `|`), o destino novo pode perder o marcador do primeiro gate, na ordem do perfil,
+    que o antigo tinha, e o status ganha `; <hoje>: dispensada no <gate>: <dispensa>; destino era <antigo>`. A
+    `dispensa` sem marcador perdido é recusada."""
     destino = _texto("destino", destino, sem_barra=True)
+    if dispensa is not None:
+        dispensa = _texto("dispensa", dispensa, sem_barra=True)
     hoje = hoje or datetime.date.today().isoformat()
     relativo = perfil.caminhos.backlog
     conteudo = _ler(raiz, relativo)
@@ -316,11 +354,23 @@ def trocar_destino(raiz: Path, perfil: Perfil, id_: str, destino: str, hoje: str
     antigo = celulas[-2]
     if destino.strip() == antigo.strip():
         raise RegistroRecusado("destino: igual ao atual")
-    for gate in perfil.gates.values():
-        marcador = gate.marcador_pendencia
-        if marcador.casefold() in antigo.casefold() and marcador.casefold() not in destino.casefold():
-            raise RegistroRecusado(f'o destino novo perde "{marcador}", que segura o {gate.nome}')
-    linhas[numero - 1] = _trocar_celulas(linhas[numero - 1], destino, f"{status.strip()}; {hoje}: destino era {antigo}")
+    perdido = next((gate for gate in perfil.gates.values()
+                    if gate.marcador_pendencia.casefold() in antigo.casefold()
+                    and gate.marcador_pendencia.casefold() not in destino.casefold()), None)
+    if perdido is not None and dispensa is None:
+        raise RegistroRecusado(
+            f'o destino novo perde "{perdido.marcador_pendencia}", que segura o {perdido.nome}; '
+            'na dispensa do gate, use --dispensa "<motivo>"'
+        )
+    if perdido is None and dispensa is not None:
+        raise RegistroRecusado("--dispensa só vale quando o destino novo perde o marcador de um gate")
+    for documento in _documentos_do_lote(raiz, perfil):
+        if lote.cita(destino, documento):
+            raise _recusa_do_lote(documento)
+    anotacao = f"dispensada no {perdido.nome}: {dispensa}; " if perdido is not None else ""
+    linhas[numero - 1] = _trocar_celulas(
+        linhas[numero - 1], destino, f"{status.strip()}; {hoje}: {anotacao}destino era {antigo}"
+    )
     comum.escrever_texto(raiz / relativo, "\n".join(linhas))
     return numero, id_
 

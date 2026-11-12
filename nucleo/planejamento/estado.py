@@ -23,7 +23,7 @@ Valida e imprime o STATUS.md, o estado curto do planejamento (`caminhos.status`)
 Sem ação, imprime o arquivo em texto canônico e sai com 0; espaço no fim da linha, linha em branco e quebra de linha
 do Windows passam. Arquivo inválido sai com 1 e `STATUS.md inválido: <erro>; <erro>`. O formato é o título fixo e um
 campo por linha, nesta ordem, em até 2.000 caracteres; os gates do perfil ficam numa linha só, na ordem das fases, e o
-`Pacote`, opcional, vem logo depois do `Documento`. Um projeto novo começa assim:
+`Pacote` e o `Lote`, opcionais, vêm logo depois do `Documento`, nessa ordem. Um projeto novo começa assim:
 
 ```text
 # Status do planejamento
@@ -45,6 +45,7 @@ com cada mudança automática numa linha a mais. Recusa sai com 1 e `recusado: <
 | `Fase` | o `id` de uma fase do perfil |
 | `Documento` | `nenhum`, ou um `.md` dentro da pasta do planejamento, com caminho normalizado e sem espaço |
 | `Pacote` | de 2 a 6 caminhos como o do `Documento`, separados por um espaço, sem repetição; `—` tira a linha |
+| `Lote` | `<prefixo de pendência>-NN (<N> documentos)` ou `migração v<de>→v<para> (<N> documentos)`, com `(1 documento)` no singular; só pelo `estado lote`, pelo `migrar` e pelo `fechar` |
 | `Passo` | inteiro de 0 a 7 |
 | `Rodada` | inteiro maior ou igual a 0 |
 | `Proximo` | uma linha, até 200 caracteres |
@@ -58,6 +59,17 @@ com cada mudança automática numa linha a mais. Recusa sai com 1 e `recusado: <
   `Documento` ou o `Pacote` com versão marcada é recusado até `versao limpar`.
 - O `Pacote` grava também o `Documento`, o primeiro da lista, e a trava de fase vale para cada documento dele.
   `Documento nenhum` tira o `Pacote`; outro `Documento` com pacote aberto é recusado.
+- A lista dos documentos do `Lote` fica fora do STATUS.md, no arquivo `lote` da pasta da aprovação
+  (`.claude/harness/aprovacao/lote`), um caminho por linha, e o `Documento` é o primeiro dela. O `Lote` e o `Pacote`
+  não se abrem juntos. `Documento nenhum` tira também o `Lote` e deixa o arquivo, que sem o campo ninguém lê.
+- O `set` do `Lote` é recusado com `recusado: Lote muda só por estado lote, migrar ou fechar`.
+- `estado lote <prefixo>-NN <caminho>...` abre o lote da pendência aberta: confere que o destino dela cita cada
+  caminho pelo nome do arquivo, sem os trechos `antes do`, e recusa, de uma vez, os que ele não cita, com
+  `<caminho> não está no destino da <ID>`, e os que não estão aprovados na tabela de artefatos, com `<caminho> não
+  está aprovado; o lote só revisa aprovados`, uma linha `recusado:` cada. Os caminhos entram em ordem de camada e, na
+  camada, na ordem do destino, qualquer que seja a ordem passada; o que o destino não cita não entra. Grava a lista, o
+  `Lote` e o `Documento` (o primeiro) e imprime o `Lote`, o `Documento` e um caminho por linha. `estado lote --tirar
+  <caminho>` tira um documento do lote aberto, e o lote seguinte nunca fica vazio.
 - O `set` do `Versao-aprovacao` é recusado com
   `recusado: Versao-aprovacao muda só por versao marcar, versao limpar, passo 6 ou fechar`.
 - Valor vazio, com espaço no fim ou com quebra de linha é recusado; o que começa por `-` vai depois de `--`. Valor
@@ -74,9 +86,11 @@ onde a sessão vem. O `systemMessage` é o aviso ao usuário, no formato do mold
 `nucleo/comum/saida.md`, e não sai depois de compactar. O `additionalContext` é o contexto do modelo, em até
 2.000 caracteres, com:
 
-1. o STATUS.md em texto canônico; num pacote, a linha do `Documento` ganha `(+<N> no pacote)`;
+1. o STATUS.md em texto canônico; num pacote, a linha do `Documento` ganha `(+<N> no pacote)`, e num lote,
+   `(+<N> no lote)`; com a lista do lote ilegível, vem logo depois dele a linha `ERRO na lista do lote: <motivo>`;
 2. `Pendências abertas: <n> (<backlog>)`, com `—` quando o backlog falta ou não se lê;
-3. `[A CONFIRMAR] no documento atual: <n>`, ou `[A CONFIRMAR] no pacote: <n>`, com `—` sem documento legível;
+3. `[A CONFIRMAR] no documento atual: <n>`, ou `[A CONFIRMAR] no pacote: <n>` ou `no lote: <n>`, com `—` sem
+   documento legível;
 4. `Estudos com decisão por registrar: <n> (<pasta>)`, com os ilegíveis, só quando há algum;
 5. `Últimos commits:` e as três linhas do `git log --oneline`, ou `Últimos commits: indisponível`;
 6. `Próximo: <ação> (<motivo>)`, como no `harness.py proximo`, e `Depois:` com até duas ações da fila;
@@ -97,7 +111,11 @@ CAMPOS_DEPOIS_DOS_GATES = ("Versao-aprovacao", "Atualizado")
 # Campo opcional, logo depois do `Documento`, só enquanto um pacote está aberto (spec 4b, §9.1): sem ele, o STATUS.md
 # vale como antes da 4b.
 CAMPO_PACOTE = "Pacote"
-CAMPOS_OPCIONAIS = (CAMPO_PACOTE,)
+# O `Lote` vem depois do `Pacote`: os dois não se abrem juntos. A lista dos documentos dele fica fora do STATUS.md, no
+# arquivo `ARQUIVO_LOTE` da pasta da aprovação.
+CAMPO_LOTE = "Lote"
+CAMPOS_OPCIONAIS = (CAMPO_PACOTE, CAMPO_LOTE)
+ARQUIVO_LOTE = "lote"
 LIMITE_PACOTE = 6
 SEM_PACOTE = "—"
 SEM_DOCUMENTO = "nenhum"
@@ -110,6 +128,8 @@ _LETRAS_DO_FORMATO = "xyzwvutsrqponmlkjihgfedcba"
 _RE_LINHA = re.compile(r"([A-Za-z][A-Za-z0-9-]*): (.+)")
 _RE_NUMERO = re.compile(r"[0-9]+")
 _RE_VERSAO = re.compile(r"sha256:[0-9a-f]{12}")
+_RE_CONTAGEM_DO_LOTE = re.compile(r" \(([0-9]+) documentos?\)")
+_PREFIXO_DA_MIGRACAO = "migração v"
 _TRAVESSAO = "—"
 _PREFIXO_A_CONFIRMAR = "[A CONFIRMAR"
 _COMANDO_GIT = ["git", "log", "--oneline", "-3"]
@@ -132,15 +152,61 @@ def campos(perfil: Perfil) -> tuple[str, ...]:
 
 
 def ordem(perfil: Perfil) -> tuple[str, ...]:
-    """Todos os campos do STATUS.md na ordem do arquivo: os de `campos` e o `Pacote` logo depois do `Documento`."""
+    """Todos os campos do STATUS.md na ordem do arquivo: os de `campos`, e o `Pacote` e o `Lote` logo depois do
+    `Documento`."""
     nomes = campos(perfil)
     depois = nomes.index("Documento") + 1
     return nomes[:depois] + CAMPOS_OPCIONAIS + nomes[depois:]
 
 
-def documentos(dados: dict[str, str]) -> list[str]:
-    """Os documentos em refino (spec 4b, §9.1): os do `Pacote`, se houver; senão o `Documento`, se não for `nenhum`;
-    senão, nenhum. Quem trava ou confere pelo documento em refino usa esta função."""
+def caminho_da_lista(raiz: Path) -> Path:
+    """O arquivo da lista dos documentos do `Lote`, na pasta da aprovação."""
+    return raiz / comum.PASTA_APROVACAO / ARQUIVO_LOTE
+
+
+def valor_do_lote(origem: str, quantos: int) -> str:
+    """O valor do campo `Lote`: `<origem> (<N> documentos)`, com `(1 documento)` no singular."""
+    return f"{origem} ({quantos} documento{'' if quantos == 1 else 's'})"
+
+
+def origem_do_lote(valor: str) -> str:
+    """O valor do campo `Lote` sem o ` (<N> documentos)`."""
+    return _RE_CONTAGEM_DO_LOTE.sub("", valor, count=1)
+
+
+def _contagem_do_lote(valor: str) -> int:
+    encontrada = _RE_CONTAGEM_DO_LOTE.search(valor)
+    return int(encontrada.group(1)) if encontrada else 0
+
+
+def _lista_do_lote(dados: dict[str, str], raiz: Path) -> list[str]:
+    """Os caminhos do arquivo da lista do lote, conferidos contra a contagem do campo `Lote`. Lança EstadoInvalido com a
+    lista ilegível, com uma linha que não é um `.md` normalizado e sem espaço, ou com outra contagem."""
+    relativo = f"{comum.PASTA_APROVACAO}/{ARQUIVO_LOTE}"
+    try:
+        texto = comum.ler_texto(raiz / relativo)
+    except UnicodeDecodeError:
+        raise EstadoInvalido(f"lista do lote ilegível: {relativo} (fora de UTF-8)") from None
+    except OSError as erro:
+        raise EstadoInvalido(f"lista do lote ilegível: {relativo} ({_motivo_do_sistema(erro)})") from None
+    linhas = texto.split("\n")
+    if linhas[-1] == "":
+        linhas.pop()
+    for linha in linhas:
+        if not (re.fullmatch(r"[^\s]+\.md", linha) and comum.caminho_normalizado(linha)):
+            raise EstadoInvalido(f'documento inválido na lista do lote: "{linha}"')
+    quantos = _contagem_do_lote(dados[CAMPO_LOTE])
+    if len(linhas) != quantos:
+        raise EstadoInvalido(f"o Lote diz {quantos} documentos, e a lista do lote tem {len(linhas)}")
+    return linhas
+
+
+def documentos(dados: dict[str, str], raiz: Path) -> list[str]:
+    """Os documentos em refino (spec 4b, §9.1): os do `Lote`, lidos da lista dele sob a `raiz`, se houver; os do
+    `Pacote`; senão o `Documento`, se não for `nenhum`; senão, nenhum. Quem trava ou confere pelo documento em refino
+    usa esta função. Lança EstadoInvalido com a lista do lote ilegível, com linha inválida ou com outra contagem."""
+    if dados.get(CAMPO_LOTE, SEM_PACOTE) != SEM_PACOTE:
+        return _lista_do_lote(dados, raiz)
     pacote = dados.get(CAMPO_PACOTE, SEM_PACOTE)
     if pacote != SEM_PACOTE:
         return pacote.split(" ")
@@ -171,6 +237,20 @@ def _motivo_do_pacote(valor: str, perfil: Perfil) -> str | None:
     return None
 
 
+def _motivo_do_lote(valor: str, perfil: Perfil) -> str | None:
+    """`<prefixo de pendência>-NN (<N> documentos)` ou `migração v<de>→v<para> (<N> documentos)`, com N maior que 0 e
+    o singular só em 1."""
+    pendencia = re.escape(perfil.ids.prefixo_pendencia) + r"-[0-9]+"
+    migracao = r"migração v[0-9]+\.[0-9]+\.[0-9]+→v[0-9]+\.[0-9]+\.[0-9]+"
+    encontrada = re.fullmatch(f"(?:{pendencia}|{migracao})" + r" \(([0-9]+) documentos?\)", valor)
+    if encontrada:
+        quantos = int(encontrada.group(1))
+        if quantos > 0 and valor.endswith("documento)") == (quantos == 1):
+            return None
+    return (f'esperado "{perfil.ids.prefixo_pendencia}-NN (<N> documentos)" ou '
+            f'"migração v<de>→v<para> (<N> documentos)", encontrado "{valor}"')
+
+
 def validar_valor(campo: str, valor: str, perfil: Perfil) -> str | None:
     """Motivo pelo qual `valor` não serve para `campo`, ou None se serve."""
     if campo == "Fase":
@@ -184,6 +264,8 @@ def validar_valor(campo: str, valor: str, perfil: Perfil) -> str | None:
             return f'esperado "nenhum" ou {pasta}/<caminho>.md normalizado e sem espaços, encontrado "{valor}"'
     elif campo == CAMPO_PACOTE:
         return _motivo_do_pacote(valor, perfil)
+    elif campo == CAMPO_LOTE:
+        return _motivo_do_lote(valor, perfil)
     elif campo == "Passo":
         if not _RE_NUMERO.fullmatch(valor):
             return f'esperado inteiro de 0 a 7, encontrado "{valor}"'
@@ -425,7 +507,7 @@ def _conferir_valor(campo: str, valor: str, perfil: Perfil) -> None:
     """Campo conhecido e valor que serve, sem olhar o arquivo. Lança EstadoInvalido."""
     if campo == "Atualizado":
         raise EstadoInvalido("Atualizado é automático")
-    if campo == CAMPO_PACOTE and valor == SEM_PACOTE:
+    if campo in CAMPOS_OPCIONAIS and valor == SEM_PACOTE:
         return  # `estado set Pacote —` tira a linha
     motivo = validar_valor(campo, valor, perfil)
     if motivo:
@@ -439,18 +521,46 @@ def _conferir_valor(campo: str, valor: str, perfil: Perfil) -> None:
         raise EstadoInvalido(f"valor inválido em {campo}: caractere que não pode ser gravado em UTF-8") from None
 
 
-def _mudancas_do_pacote(mudancas: dict[str, str], valores: dict[str, str]) -> dict[str, str]:
-    """As mudanças automáticas que o `Pacote` traz (spec 4b, §9.1). Lança EstadoInvalido para `Documento` diferente do
-    primeiro do pacote pedido e para outro `Documento` com um pacote aberto."""
+def _mudancas_do_pacote(
+    mudancas: dict[str, str], valores: dict[str, str], lote: list[str] | None = None
+) -> dict[str, str]:
+    """As mudanças automáticas que o `Pacote` e o `Lote` trazem (spec 4b, §9.1). Lança EstadoInvalido para `Documento`
+    diferente do primeiro do pacote ou do lote pedido, para outro `Documento` com um pacote ou um lote aberto e para
+    um deles aberto com o outro aberto. `lote` traz os documentos do `Lote` que `mudancas` abre."""
     pacote = mudancas.get(CAMPO_PACOTE)
     documento = mudancas.get("Documento")
     atual = valores.get(CAMPO_PACOTE, SEM_PACOTE)
+    lote_atual = valores.get(CAMPO_LOTE, SEM_PACOTE)
+    novo_lote = mudancas.get(CAMPO_LOTE)
+    if novo_lote is not None and novo_lote != SEM_PACOTE:
+        if atual != SEM_PACOTE:
+            raise EstadoInvalido("Pacote aberto; feche-o com estado set Documento nenhum antes de abrir um lote")
+        if lote_atual.startswith(_PREFIXO_DA_MIGRACAO) and not novo_lote.startswith(_PREFIXO_DA_MIGRACAO):
+            raise EstadoInvalido("lote de migração aberto; feche-o antes de abrir outro lote")
+        if not lote:
+            raise EstadoInvalido("Lote muda só por estado lote, migrar ou fechar")
+        if documento is not None and documento != lote[0]:
+            raise EstadoInvalido(f"o Documento é o primeiro do Lote: {lote[0]}")
+        return {"Documento": lote[0]} if lote[0] != valores.get("Documento") else {}
     if pacote is not None and pacote != SEM_PACOTE:
+        if lote_atual != SEM_PACOTE:
+            raise EstadoInvalido("Lote aberto; feche-o com estado set Documento nenhum antes de abrir um Pacote")
         primeiro = pacote.split(" ")[0]
         if documento is not None and documento != primeiro:
             raise EstadoInvalido(f"o Documento é o primeiro do Pacote: {primeiro}")
         return {"Documento": primeiro} if primeiro != valores.get("Documento") else {}
-    if documento is None or pacote is not None or atual == SEM_PACOTE:
+    if documento is None or pacote is not None:
+        return {}
+    if lote_atual != SEM_PACOTE:
+        if documento == SEM_DOCUMENTO:
+            return {CAMPO_LOTE: SEM_PACOTE}
+        if documento != valores.get("Documento"):
+            raise EstadoInvalido(
+                f"Lote aberto com {_contagem_do_lote(lote_atual)} documentos; mude a lista com estado lote ou feche "
+                "com estado set Documento nenhum"
+            )
+        return {}
+    if atual == SEM_PACOTE:
         return {}
     if documento == SEM_DOCUMENTO:
         return {CAMPO_PACOTE: SEM_PACOTE}
@@ -463,7 +573,7 @@ def _mudancas_do_pacote(mudancas: dict[str, str], valores: dict[str, str]) -> di
 
 
 def preparar(
-    caminho: Path, mudancas: dict[str, str], perfil: Perfil, hoje: str | None = None
+    caminho: Path, mudancas: dict[str, str], perfil: Perfil, hoje: str | None = None, lote: list[str] | None = None
 ) -> tuple[str, dict[str, str]]:
     """O texto novo do STATUS.md com as `mudancas` e as mudanças automáticas, sem gravar nada.
 
@@ -480,6 +590,11 @@ def preparar(
     automática quando ele muda); `Pacote —` tira a linha; `Documento nenhum` tira também o `Pacote` (mudança
     automática `Pacote = —`); outro `Documento` com um pacote aberto é recusado. Trocar ou tirar o `Pacote` com
     versão marcada é recusado, como trocar o `Documento`. A trava de fase vale para cada documento do pacote.
+
+    Lote: as mesmas regras, simétricas, com `lote` a lista de documentos do `Lote` que `mudancas` abre ou muda (o
+    `definir_lote` e o `tirar_do_lote` a passam); `Lote` com valor e sem `lote` é recusado. O `Lote` com `Pacote` aberto
+    é recusado, e o inverso também; um lote de pendência sobre um lote de migração, também. Abrir ou mudar o `Lote` com
+    versão marcada é recusado até `versao limpar`. A trava de fase vale para cada documento do lote.
     """
     todos = ordem(perfil)
     desconhecido = next((campo for campo in mudancas if campo not in todos), None)
@@ -500,11 +615,21 @@ def preparar(
     valores, estrutura, invalidos = _examinar(texto, perfil)
     if estrutura:
         raise EstadoInvalido(_sem_estrutura(estrutura[0]), estrutura)
-    automaticas = _mudancas_do_pacote(mudancas, valores)
+    automaticas = _mudancas_do_pacote(mudancas, valores, lote)
     efetivas = {**mudancas, **automaticas}
     marcado = efetivas.get("Versao-aprovacao", valores.get("Versao-aprovacao", ""))
     pacote_atual = valores.get(CAMPO_PACOTE, SEM_PACOTE)
-    marcado_para = valores.get("Documento") if pacote_atual == SEM_PACOTE else f"o pacote {pacote_atual}"
+    lote_atual = valores.get(CAMPO_LOTE, SEM_PACOTE)
+    if pacote_atual != SEM_PACOTE:
+        marcado_para = f"o pacote {pacote_atual}"
+    elif lote_atual != SEM_PACOTE:
+        marcado_para = f"o lote {lote_atual}"
+    else:
+        marcado_para = valores.get("Documento")
+    if lote is not None and _RE_VERSAO.fullmatch(marcado):
+        raise EstadoInvalido(
+            f"Versao-aprovacao {marcado} está marcada para {marcado_para}; rode versao limpar antes de trocar o Lote"
+        )
     documento = efetivas.get("Documento")
     if documento is not None and documento != valores.get("Documento") and _RE_VERSAO.fullmatch(marcado):
         # O hash marcado vale para o Documento atual; trocar sem limpar deixaria o hash apontando para outro arquivo.
@@ -518,7 +643,9 @@ def preparar(
             f"Versao-aprovacao {marcado} está marcada para {marcado_para}; rode versao limpar antes de trocar o Pacote"
         )
     for campo in (campo for campo in todos if campo in efetivas):
-        if campo != CAMPO_PACOTE:
+        if campo == CAMPO_LOTE:
+            pares = [("Documento", item) for item in lote or []]
+        elif campo != CAMPO_PACOTE:
             pares = [(campo, efetivas[campo])]
         elif efetivas[campo] == SEM_PACOTE:
             pares = []
@@ -539,8 +666,9 @@ def preparar(
         automaticas[fase_nova.gate] = "pendente"
 
     novos = {**valores, **mudancas, **automaticas, "Atualizado": hoje}
-    if novos.get(CAMPO_PACOTE) == SEM_PACOTE:
-        del novos[CAMPO_PACOTE]
+    for opcional in CAMPOS_OPCIONAIS:
+        if novos.get(opcional) == SEM_PACOTE:
+            del novos[opcional]
     novo_texto = formatar(novos, perfil)
     _, estrutura_nova, invalidos_novos = _examinar(novo_texto, perfil)
     erros_novos = [e for e in estrutura_nova + invalidos_novos if e not in invalidos]
@@ -564,6 +692,95 @@ def definir_varios(caminho: Path, mudancas: dict[str, str], perfil: Perfil, hoje
         raise EstadoInvalido(f"não foi possível gravar: {caminho} ({_motivo_do_sistema(erro)})") from None
     _gravar_hash_do_status(caminho, novo_texto, perfil)
     return automaticas
+
+
+def _na_ordem(mudancas: dict[str, str], perfil: Perfil) -> dict[str, str]:
+    """As mudanças na ordem do arquivo."""
+    return {campo: mudancas[campo] for campo in ordem(perfil) if campo in mudancas}
+
+
+def _gravar_lote(
+    caminho: Path, raiz: Path, valor: str, documentos: list[str], extras: dict[str, str], perfil: Perfil,
+    hoje: str | None,
+) -> dict[str, str]:
+    """Grava o `Lote` com os `documentos`: a lista e, numa escrita só, o STATUS.md com o `Lote`, o `Documento` (o
+    primeiro) e os `extras`. Tudo o que pode recusar roda antes de gravar; se o STATUS.md falha, a lista volta ao texto
+    anterior, ou some, se não havia. Devolve as mudanças automáticas e as dos `extras`, na ordem do arquivo."""
+    novo_texto, automaticas = preparar(caminho, {CAMPO_LOTE: valor, **extras}, perfil, hoje, lote=documentos)
+    lista = caminho_da_lista(raiz)
+    try:
+        anterior = lista.read_bytes()
+    except FileNotFoundError:
+        anterior = None
+    except OSError as erro:
+        raise EstadoInvalido(f"não foi possível ler: {lista} ({_motivo_do_sistema(erro)})") from None
+    try:
+        comum.escrever_texto(lista, "".join(f"{documento}\n" for documento in documentos))
+    except OSError as erro:
+        raise EstadoInvalido(f"não foi possível gravar: {lista} ({_motivo_do_sistema(erro)})") from None
+    try:
+        comum.escrever_texto(caminho, novo_texto)
+    except OSError as erro:
+        try:
+            if anterior is None:
+                lista.unlink()
+            else:
+                lista.write_bytes(anterior)
+        except OSError:
+            pass
+        raise EstadoInvalido(f"não foi possível gravar: {caminho} ({_motivo_do_sistema(erro)})") from None
+    _gravar_hash_do_status(caminho, novo_texto, perfil)
+    return _na_ordem({**automaticas, **extras}, perfil)
+
+
+def definir_lote(
+    caminho: Path, raiz: Path, origem: str, documentos: list[str], perfil: Perfil,
+    extras: dict[str, str] | None = None, hoje: str | None = None,
+) -> dict[str, str]:
+    """Abre o `Lote` `<origem> (<N> documentos)` com os `documentos`, na ordem dada: grava a lista no arquivo `lote`
+    da pasta da aprovação sob a `raiz` e, numa escrita só, o `Lote`, o `Documento` (o primeiro) e os `extras`.
+
+    Nada é gravado se algo for recusado: documento repetido ou fora do formato do `Documento`, `Pacote` aberto,
+    lote de migração aberto, versão marcada, trava de fase de qualquer documento ou campo dos `extras`. Devolve as
+    mudanças automáticas e as dos `extras`, na ordem do arquivo; o `Documento`, o primeiro, vem sempre. Erro do
+    sistema na gravação vira EstadoInvalido."""
+    invalido = next((d for d in documentos if d == SEM_DOCUMENTO or validar_valor("Documento", d, perfil)), None)
+    if invalido is not None:
+        raise EstadoInvalido(f'documento inválido no lote: "{invalido}"')
+    repetido = next((d for posicao, d in enumerate(documentos) if d in documentos[:posicao]), None)
+    if repetido is not None:
+        raise EstadoInvalido(f"documento repetido no lote: {repetido}")
+    mudancas = _gravar_lote(
+        caminho, raiz, valor_do_lote(origem, len(documentos)), list(documentos), dict(extras or {}), perfil, hoje
+    )
+    return _na_ordem({"Documento": documentos[0], **mudancas}, perfil)
+
+
+def tirar_do_lote(
+    caminho: Path, raiz: Path, documento: str, perfil: Perfil, hoje: str | None = None
+) -> dict[str, str]:
+    """Tira o `documento` do `Lote` aberto: regrava a lista e o campo com um a menos, e o `Documento` vira o primeiro
+    que resta. Recusa o documento fora da lista, o último que resta e a versão marcada. Devolve as mudanças."""
+    dados = ler(caminho, perfil)
+    if CAMPO_LOTE not in dados:
+        raise EstadoInvalido("sem lote aberto")
+    lista = documentos(dados, raiz)
+    if documento not in lista:
+        raise EstadoInvalido(f"{documento} não está no lote")
+    restantes = [item for item in lista if item != documento]
+    if not restantes:
+        raise EstadoInvalido("o lote ficaria vazio; feche com estado set Documento nenhum")
+    valor = valor_do_lote(origem_do_lote(dados[CAMPO_LOTE]), len(restantes))
+    mudancas = _gravar_lote(caminho, raiz, valor, restantes, {}, perfil, hoje)
+    return _na_ordem({**mudancas, CAMPO_LOTE: valor}, perfil)
+
+
+def apagar_lista_do_lote(raiz: Path) -> None:
+    """Apaga o arquivo da lista do lote; ausente, não faz nada."""
+    try:
+        caminho_da_lista(raiz).unlink()
+    except FileNotFoundError:
+        pass
 
 
 def hash_do_status(dados: bytes) -> str:
@@ -625,31 +842,40 @@ def _linha_de_erro(mensagem: str) -> str:
     return f"ERRO no STATUS.md: {mensagem}. Peça ao usuário para corrigir o arquivo à mão\n"
 
 
-def _inicio_do_bloco(caminho: Path, perfil: Perfil) -> tuple[str, list[str], bool]:
-    """Começo do bloco do hook, os documentos em refino e se eles formam um pacote. O texto termina em quebra de linha.
+def _inicio_do_bloco(raiz: Path, caminho: Path, perfil: Perfil) -> tuple[str, list[str], str | None]:
+    """Começo do bloco do hook, os documentos em refino e o grupo que eles formam (`pacote`, `lote` ou None). O texto
+    termina em quebra de linha.
 
-    STATUS.md válido: o texto canônico; com pacote, a linha do `Documento` ganha ` (+<N> no pacote)`. Inválido ou
-    ausente: a linha `ERRO no STATUS.md: ...` e, se o arquivo existe e tem conteúdo, o texto bruto dele; o `Documento`
-    vem da análise tolerante quando ela é legível, sem pacote.
+    STATUS.md válido: o texto canônico; com pacote ou lote, a linha do `Documento` ganha ` (+<N> no pacote)` ou
+    ` (+<N> no lote)`. Com `Lote` e a lista dele ilegível ou fora da conta: o texto canônico, a linha
+    `ERRO na lista do lote: ...` e só o `Documento` na lista. Inválido ou ausente: a linha `ERRO no STATUS.md: ...` e,
+    se o arquivo existe e tem conteúdo, o texto bruto dele; o `Documento` vem da análise tolerante quando ela é
+    legível, sem grupo.
     """
     try:
         texto = _ler_arquivo(caminho)
     except EstadoInvalido as erro:
-        return _linha_de_erro(erro.mensagem), [], False
+        return _linha_de_erro(erro.mensagem), [], None
     try:
         dados = analisar(texto, perfil)
     except EstadoInvalido as erro:
         bruto = texto.rstrip()
         documento = _documento_legivel(texto, perfil)
         lista = [] if documento in (None, SEM_DOCUMENTO) else [documento]
-        return _linha_de_erro(erro.mensagem) + (bruto + "\n" if bruto else ""), lista, False
+        return _linha_de_erro(erro.mensagem) + (bruto + "\n" if bruto else ""), lista, None
     canonico = formatar(dados, perfil)
-    lista = documentos(dados)
-    if CAMPO_PACOTE not in dados:
-        return canonico, lista, False
+    try:
+        lista = documentos(dados, raiz)
+    except EstadoInvalido as erro:
+        documento = dados["Documento"]
+        lista = [] if documento == SEM_DOCUMENTO else [documento]
+        return canonico + f"ERRO na lista do lote: {erro.mensagem}\n", lista, None
+    grupo = CAMPO_LOTE.lower() if CAMPO_LOTE in dados else CAMPO_PACOTE.lower() if CAMPO_PACOTE in dados else None
+    if grupo is None:
+        return canonico, lista, None
     linha = f"\nDocumento: {dados['Documento']}\n"
-    com_conta = f"\nDocumento: {dados['Documento']} (+{len(lista) - 1} no pacote)\n"
-    return canonico.replace(linha, com_conta, 1), lista, True
+    com_conta = f"\nDocumento: {dados['Documento']} (+{len(lista) - 1} no {grupo})\n"
+    return canonico.replace(linha, com_conta, 1), lista, grupo
 
 
 def _linha_pendencias(raiz: Path, perfil: Perfil) -> str:
@@ -662,9 +888,9 @@ def _linha_pendencias(raiz: Path, perfil: Perfil) -> str:
     return f"Pendências abertas: {abertas} ({perfil.caminhos.backlog})\n"
 
 
-def _linha_a_confirmar(raiz: Path, lista: list[str], em_pacote: bool) -> str:
+def _linha_a_confirmar(raiz: Path, lista: list[str], grupo: str | None) -> str:
     """Conta as ocorrências do prefixo `[A CONFIRMAR` no documento atual, ou somadas nos documentos legíveis do
-    pacote; sem documento legível, mostra travessão."""
+    pacote ou do lote (`grupo`); sem documento legível, mostra travessão."""
     contagens = []
     for documento in lista:
         try:
@@ -672,7 +898,7 @@ def _linha_a_confirmar(raiz: Path, lista: list[str], em_pacote: bool) -> str:
         except (OSError, UnicodeDecodeError):
             pass
     total = str(sum(contagens)) if contagens else _TRAVESSAO
-    return f"[A CONFIRMAR] no pacote: {total}\n" if em_pacote else f"[A CONFIRMAR] no documento atual: {total}\n"
+    return f"[A CONFIRMAR] no {grupo}: {total}\n" if grupo else f"[A CONFIRMAR] no documento atual: {total}\n"
 
 
 def _linhas_de_commits(raiz: Path, executar_git) -> str:
@@ -715,11 +941,11 @@ def bloco_hook(raiz: Path, perfil: Perfil, executar_git=subprocess.run) -> str:
     O texto termina em quebra de linha e, com ela, cabe em LIMITE_HOOK caracteres, de modo que a saída impressa não
     passa do limite. Nunca lança por falta ou erro de arquivo ou do git; `executar_git` é injetável para teste.
     """
-    inicio, lista, em_pacote = _inicio_do_bloco(raiz / perfil.caminhos.status, perfil)
+    inicio, lista, grupo = _inicio_do_bloco(raiz, raiz / perfil.caminhos.status, perfil)
     return limitar_hook(
         inicio
         + _linha_pendencias(raiz, perfil)
-        + _linha_a_confirmar(raiz, lista, em_pacote)
+        + _linha_a_confirmar(raiz, lista, grupo)
         + _linha_estudos(raiz, perfil)
         + _linhas_de_commits(raiz, executar_git)
     )

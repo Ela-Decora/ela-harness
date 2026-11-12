@@ -4,6 +4,7 @@ O prefixo das pendências vem do perfil do projeto; o formato das duas tabelas �
 """
 from __future__ import annotations
 
+import posixpath
 import re
 from pathlib import Path
 
@@ -38,9 +39,16 @@ por linha; os IDs com erro, que vêm abaixo como no `backlog ids`; `<prefixo>-NN
 dela se resolveu. Imprime `<prefixo>-NN com destino <destino> em <backlog>:<linha>`. O ID casa pelo número. Recusa sai
 com 1 e `recusado: <motivo>`, sem gravar: o `destino` vazio, com quebra de linha ou com `|`; o destino novo que perde o
 marcador de um gate (`gates.<gate>.marcador_pendencia`) que o antigo tinha, sem distinção de maiúsculas, com
-`o destino novo perde "<marcador>", que segura o <gate>`; o destino igual ao atual, com `destino: igual ao atual`; os
-IDs com erro, abaixo como no `backlog ids`; `<prefixo>-NN não está no backlog`; `<prefixo>-NN não está aberta:
-<status>`; `<prefixo>-NN não tem a célula de destino`.
+`o destino novo perde "<marcador>", que segura o <gate>; na dispensa do gate, use --dispensa "<motivo>"`; o destino
+igual ao atual, com `destino: igual ao atual`; o destino novo que cita um documento do lote aberto (o primeiro, na
+ordem do lote), com `<documento> está no lote aberto; o que resta dele se resolve neste ciclo`; os IDs com erro,
+abaixo como no `backlog ids`; `<prefixo>-NN não está no backlog`; `<prefixo>-NN não está aberta: <status>`;
+`<prefixo>-NN não tem a célula de destino`.
+
+`backlog destino --dispensa "<motivo>"` deixa o destino novo perder o marcador do primeiro gate, na ordem do perfil, que
+o antigo tinha, e acrescenta `; <AAAA-MM-DD>: dispensada no <gate>: <motivo>; destino era <destino antigo>` ao status. O
+`--dispensa` sem marcador perdido é recusado, com `--dispensa só vale quando o destino novo perde o marcador de um
+gate`, e o motivo vazio, com quebra de linha ou com `|` também.
 
 O `--em` é o caminho a partir da raiz, como `CLAUDE.md` ou `<pasta do planejamento>/<fase>/<documento>.md`, ou só o
 nome do arquivo, quando ele é único entre os arquivos que o git não ignora, com commit ou sem.
@@ -314,3 +322,21 @@ def gravar_artefato(texto: str, caminho: str, camada: str, status: str, data: st
     quebra = "\r" if linhas[ultima].endswith("\r") else ""
     linhas.insert(ultima + 1, f"| {caminho} | {camada} | {status} | {data} |{quebra}")
     return "\n".join(linhas)
+
+
+_ARQUIVO_MD = r"`?(?:[\w.-]+/)*[\w.-]+\.md`?"
+_RE_ANTES_DO = re.compile(rf"\bantes d[oa] {_ARQUIVO_MD}(?:(?:,? e|,) d[oa] {_ARQUIVO_MD})*", re.IGNORECASE)
+_RE_ARQUIVO_DO_TRECHO = re.compile(r"\b(d[oa]) `?((?:[\w.-]+/)*[\w.-]+\.md)`?", re.IGNORECASE)
+
+
+def antes_do_arquivo(destino: str) -> tuple[tuple[tuple[str, str], ...], str]:
+    """`(trechos, resto)` dos trechos `antes do <arquivo>.md` ou `antes da <arquivo>.md` do destino, com ou sem
+    crases e sem distinção de maiúsculas, cada um com os arquivos que o seguem por `, do`, `e do` ou `, e do` (ou
+    `da`). Cada arquivo, na ordem do destino, dá `(arquivo, rótulo)`: o nome do arquivo, o último segmento do caminho,
+    e o rótulo `antes d[oa] <arquivo>`, em minúsculas no `antes d[oa]`. O resto é o destino sem os trechos. Sem
+    trecho, `((), destino)`."""
+    trechos = tuple((posixpath.basename(arquivo.group(2)),
+                     f"antes {arquivo.group(1).lower()} {posixpath.basename(arquivo.group(2))}")
+                    for achado in _RE_ANTES_DO.finditer(destino)
+                    for arquivo in _RE_ARQUIVO_DO_TRECHO.finditer(achado.group(0)))
+    return trechos, _RE_ANTES_DO.sub("", destino)

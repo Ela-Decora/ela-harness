@@ -49,6 +49,8 @@ argumento, ou com documento fora da pasta do planejamento (`documento fora de <p
 """
 
 PASTA_DOSSIE = ".claude/harness/dossie"
+# A saída do `afetados --gravar`, que o revisor lê; o `fechar` a apaga, para não passar de um ciclo a outro.
+ARQUIVO_AFETADOS = f"{PASTA_DOSSIE}/afetados.txt"
 LIMITE_POR_FONTE = 15
 LIMITE_SEM_COBERTURA = 30
 LIMITE_RESUMO = 20

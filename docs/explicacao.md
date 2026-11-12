@@ -34,6 +34,17 @@ flowchart TD
   P6 -->|aprovado| P7["7 Registro e commit"]
 ```
 
+## O lote e o migrar
+
+**O lote.** Uma pendência pode pedir mudança em vários aprovados, de camadas diferentes. Em vez de um ciclo por
+documento, o lote os revisa juntos: uma pendência, várias camadas, uma checagem, um revisor por camada e um só
+"aprovado". Antes dele, o resumo por mudança diz o que mudou em cada documento, com a legenda dos IDs.
+
+**O migrar.** Quando a forma dos documentos muda numa versão, `harness.py migrar` a corrige por script, sem o modelo, e
+abre um lote com os documentos corrigidos: começa na checagem, tem um revisor com o critério forma e um só "aprovado", e
+os documentos mantêm o status e a data de aprovação. O que o script não corrige fica como está e sai como aviso; sem
+nada a corrigir, ele só registra a migração. A verificação nova só avisa no aprovado antes da migração que a trouxe.
+
 ## Limitações
 
 - **Uma pessoa por vez.** O `STATUS.md` acompanha um documento ou um pacote, e duas sessões simultâneas o disputam.

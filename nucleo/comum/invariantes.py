@@ -59,7 +59,8 @@ ele, que a CI usa. Os alterados vêm do git, com 10 s de limite por chamada; o r
   `status-pelo-harness: AVISO: <status> do commit não é o que o harness gravou por último nesta cópia; confira com
   harness.py proximo`.
 - `checar-aprovados`, só com `--indice` e `--base`: falha se um `.md` alterado da pasta do planejamento, `aprovado`
-  no backlog da versão nova, falha no `checar`, com o texto e o molde da versão nova.
+  no backlog da versão nova, falha no `checar`, com o texto e o molde da versão nova. A verificação do `DESDE` do
+  `checar` que só avisa no aprovado anterior à migração dela não conta, com as decisões da versão nova.
 - `legenda-em-dia`, só com `--indice` e `--base` e só com `caminhos.legenda` no perfil: gera a legenda com os
   arquivos da versão nova, sempre, sem olhar o que mudou, e a compara com a legenda da versão nova. Saídas:
   `legenda-em-dia: OK`; `legenda-em-dia: FALHA: rode harness.py legenda`, com a legenda ausente ou diferente; e
@@ -472,6 +473,8 @@ def _checar_aprovados(git: _Git, alterados: list[str], perfil: Perfil) -> Confer
                 detalhes.append(f"{caminho}: molde ausente ({molde})")
                 continue
         resultados = checar.checar_versao(git.raiz, caminho, texto, texto_molde, texto_backlog, perfil)
+        resultados = checar.rebaixar_do_documento(
+            resultados, caminho, texto_backlog, perfil, lambda: git.novo(perfil.caminhos.decisoes))
         falhas = [resultado.nome for resultado in resultados if not resultado.ok]
         if falhas:
             detalhes.append(f"{caminho}: {', '.join(falhas)}")

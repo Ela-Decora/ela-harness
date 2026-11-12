@@ -1,7 +1,7 @@
 """O próximo passo do planejamento (spec 4a, §6), calculado pelo STATUS, pelos artefatos, pelas pendências, pelos
 links e pelo ambiente. Lê a tabela de artefatos, as pendências abertas e os links entre os documentos.
 
-Em ordem de precedência: o que consertar, o documento ou pacote em andamento e a fila da fase (a geração dos
+Em ordem de precedência: o que consertar, o documento, pacote ou lote em andamento e a fila da fase (a geração dos
 documentos do item `ligados`, quando a fase não tem nenhum; módulos, derivados,
 rascunhos, obrigatórios, documentos novos que as pendências com o marcador do gate pedem, revisões com o marcador do
 gate, pendências com o marcador que nenhum item da fila resolve e o gate). Só lê: não grava nada, e a mesma entrada
@@ -25,6 +25,7 @@ import comum
 import estado
 import estudos
 import gate
+import lote
 import manifesto
 import passagem
 import rastreio
@@ -39,10 +40,14 @@ Só lê; a rede só para o retorno, e o hook nunca consulta. A ação recomendad
 
 1. consertar: no passo 7 com a versão marcada já no HEAD, `harness.py fechar`; nos passos 6 e 7 com o documento
    mudado desde a marcação, `harness.py versao conferir`; o documento em refino ausente do disco; o documento ou o
-   pacote do STATUS, nos passos 0 a 6, todo `aprovado` na tabela e sem pendência aberta que o cite: `perguntar ao
-   usuário se o STATUS está velho`, com a volta no motivo. Num worktree, a ação ganha `(na árvore principal)`.
-2. o documento ou o pacote em andamento: `/ela-harness:refinar-documento <documento>`, que retoma do passo atual,
-   ou, no passo 7, o commit e o `harness.py fechar`; com "quando o usuário liberar" no `Proximo`, perguntar se o
+   pacote ou o lote do STATUS, nos passos 0 a 6, todo `aprovado` na tabela e sem pendência aberta que o cite:
+   `perguntar ao usuário se o STATUS está velho`, com a volta no motivo; o lote de migração, que mantém os documentos
+   `aprovado`, não entra nesse caso. Com o `Lote` no STATUS e a lista dele ausente, ilegível ou fora da conta,
+   `a lista do lote falta ou não confere`, com a mensagem do `estado` e o jeito de refazer no motivo, que, com a
+   versão marcada, começa por `com a autorização do usuário, harness.py versao limpar`. Num worktree, a ação ganha
+   `(na árvore principal)`.
+2. o documento, o pacote ou o lote em andamento: `/ela-harness:refinar-documento <documento>`, que retoma do passo
+   atual, ou, no passo 7, o commit e o `harness.py fechar`; com "quando o usuário liberar" no `Proximo`, perguntar se o
    usuário libera o commit.
 3. a fila da fase, sem nada aberto: `/ela-harness:gerar-modulos`, quando o gate da fase tem item `ligados`, nenhum
    documento da fase, no disco ou em refino, casa o `por` dele e todo obrigatório da fase existe e está aprovado, com
@@ -65,7 +70,10 @@ Só lê; a rede só para o retorno, e o hook nunca consulta. A ação recomendad
    A revisão de um aprovado citado por pendência com `antes do <arquivo>.md` entra logo antes do item desse arquivo,
    se ele está na fila como módulo, rascunho, obrigatório ou documento novo; com mais de um arquivo
    (`antes do a.md e do b.md`), antes do primeiro deles na fila; senão, vai junto das revisões do marcador. Nenhum
-   arquivo depois de um `antes do` conta como citado. Com o gate aprovado,
+   arquivo depois de um `antes do` conta como citado. A pendência cujo destino cita dois ou mais aprovados (fora os
+   em refino) vira um item `lote` só, no lugar das revisões desses documentos e na posição da primeira delas, com a
+   ação do refino do primeiro documento, na ordem do lote, e o motivo `lote <ID>: <N> documentos, camadas <a> a <b>`
+   (`camada <a>` com uma só); o mesmo vale para as revisões sem o marcador. Com o gate aprovado,
    `harness.py estado set Fase <fase seguinte>`, e as pendências com `antes do` aparecem nas revisões sem o marcador;
    com o da última fase, `planejamento concluído: todos os gates aprovados`.
 
@@ -78,7 +86,7 @@ recusa ou `<Tipo>: <primeira linha da mensagem>` de outro erro; o gate segue rec
 
 A saída segue o molde "Próximo" do `nucleo/comum/saida.md`; a linha `Atenção` traz o backlog ilegível, os estudos
 com decisão por registrar, os relatos não incorporados, os avisos do ambiente, o retorno e, por último, a passagem.
-Com `--verbose`, a fila inteira, as revisões por documento, também as sem o marcador, e
+Com `--verbose`, a fila inteira, as revisões por documento, também as sem o marcador (o lote, pelo motivo dele), e
 `Retornos com pendência (<n>):`, com uma linha `  #N <título>: <pendências>` por issue, cada pendência resolvida com
 ` (resolvida)`. STATUS.md inválido sai com 1 e `STATUS.md inválido: <motivo>`.
 
@@ -106,6 +114,7 @@ RASCUNHO = "rascunho"
 OBRIGATORIO = "obrigatorio"
 REVISAO = "revisao"
 REVISAO_ANTES = "revisao-antes"
+LOTE = "lote"
 NOVO = "novo"
 PENDENCIA = "pendencia"
 GATE = "gate"
@@ -121,26 +130,14 @@ _GERAR = f"/{comum.PREFIXO_DAS_SKILLS}gerar-modulos"
 _PREFIXO_CONSERTAR = "consertar: "
 _APROVADO_EM = "aprovado em "
 _ESPERA = "quando o usuário liberar"
+_MIGRACAO = "migração "
 _SEPARADOR = " · "
-_ARQUIVO_MD = r"`?(?:[\w.-]+/)*[\w.-]+\.md`?"
-_RE_ANTES_DO = re.compile(rf"\bantes d[oa] {_ARQUIVO_MD}(?:(?:,? e|,) d[oa] {_ARQUIVO_MD})*", re.IGNORECASE)
-_RE_ARQUIVO_DO_TRECHO = re.compile(r"\b(d[oa]) `?((?:[\w.-]+/)*[\w.-]+\.md)`?", re.IGNORECASE)
 _RE_CAMINHO_DO_DESTINO = re.compile(r"(?<![\w./:-])((?:[\w.-]+/)*[\w.-]+\.md|(?:[\w.-]+/)+)(?![\w/-])")
 _A_ESCREVER = (MODULO, RASCUNHO, OBRIGATORIO, NOVO)
 _DE_DOCUMENTO = (MODULO, DERIVADOS, RASCUNHO, OBRIGATORIO)
 
 
-def antes_do_arquivo(destino: str) -> tuple[tuple[tuple[str, str], ...], str]:
-    """`(trechos, resto)` dos trechos `antes do <arquivo>.md` ou `antes da <arquivo>.md` do destino, com ou sem
-    crases e sem distinção de maiúsculas, cada um com os arquivos que o seguem por `, do`, `e do` ou `, e do` (ou
-    `da`). Cada arquivo, na ordem do destino, dá `(arquivo, rótulo)`: o nome do arquivo, o último segmento do caminho,
-    e o rótulo `antes d[oa] <arquivo>`, em minúsculas no `antes d[oa]`. O resto é o destino sem os trechos. Sem
-    trecho, `((), destino)`."""
-    trechos = tuple((posixpath.basename(arquivo.group(2)),
-                     f"antes {arquivo.group(1).lower()} {posixpath.basename(arquivo.group(2))}")
-                    for achado in _RE_ANTES_DO.finditer(destino)
-                    for arquivo in _RE_ARQUIVO_DO_TRECHO.finditer(achado.group(0)))
-    return trechos, _RE_ANTES_DO.sub("", destino)
+antes_do_arquivo = backlog.antes_do_arquivo
 
 
 @dataclass(frozen=True)
@@ -218,26 +215,43 @@ class _Fontes:
         return ids
 
 
+def _lista_quebrada(dados: dict[str, str], em_refino: list[str], mensagem: str) -> Item:
+    """O `consertar` do `Lote` sem a lista, ou com a lista que não confere: o motivo é a mensagem do `estado` e o jeito
+    de refazer, que no lote de migração é restaurar os documentos e rodar o `migrar` de novo. Com a versão marcada,
+    os dois jeitos são recusados, e o texto começa pelo `versao limpar`, com a autorização do usuário."""
+    origem = estado.origem_do_lote(dados[estado.CAMPO_LOTE])
+    if origem.startswith(_MIGRACAO):
+        refazer = ("restaure os documentos (git restore), feche com harness.py estado set Documento nenhum e rode "
+                   "harness.py migrar de novo")
+    else:
+        refazer = f"refaça com harness.py estado lote {origem} <caminhos do destino>"
+    if dados[versao.CAMPO] != versao.SEM_VERSAO:
+        refazer = f"com a autorização do usuário, harness.py versao limpar; {refazer}"
+    return Item(CONSERTAR, "a lista do lote falta ou não confere", f"{mensagem}; {refazer}",
+                em_refino[0] if em_refino else "")
+
+
 def _consertar(f: _Fontes, dados: dict[str, str], em_refino: list[str], executar) -> Item | None:
     """O que vem antes de tudo (§6.2, item 1), ou None."""
     passo = int(dados["Passo"])
     marcado = dados[versao.CAMPO]
     if passo == 7 and marcado != versao.SEM_VERSAO and em_refino:
         try:
-            head = versao.no_head(f.raiz, em_refino, executar)
+            head = versao.no_head(f.raiz, em_refino, executar, grupo=versao.em_grupo(dados))
         except versao.VersaoInvalida:
             head = None
         if head is not None and not head.fora_do_commit and head.hash_head == marcado:
             if len(em_refino) == 1:
                 alvo = f"de {posixpath.basename(em_refino[0])}"
             else:
-                alvo = f"do pacote de {len(em_refino)}"
+                alvo = f"do {_grupo(dados)} de {len(em_refino)}"
             return Item(CONSERTAR, "harness.py fechar",
                         f"passo 7 {alvo} com {marcado} no HEAD {head.commit}; fecha sem pedir autorização", em_refino[0])
     no_disco = [(f.raiz / documento).is_file() for documento in em_refino]
     if passo in (6, 7) and marcado != versao.SEM_VERSAO and em_refino and all(no_disco):
         try:
-            atual = versao.hash_da_versao([(documento, (f.raiz / documento).read_bytes()) for documento in em_refino])
+            atual = versao.hash_da_versao([(documento, (f.raiz / documento).read_bytes()) for documento in em_refino],
+                                          versao.em_grupo(dados))
         except OSError:
             atual = marcado
         if atual != marcado:
@@ -250,15 +264,22 @@ def _consertar(f: _Fontes, dados: dict[str, str], em_refino: list[str], executar
     return _status_velho(f, dados, em_refino)
 
 
+def _grupo(dados: dict[str, str]) -> str:
+    """`lote` com `Lote` no STATUS, senão `pacote`."""
+    return "lote" if estado.CAMPO_LOTE in dados else "pacote"
+
+
 def _status_velho(f: _Fontes, dados: dict[str, str], em_refino: list[str]) -> Item | None:
     """O quarto caso do consertar (spec da onda 6, bloco D, §7.1): o documento ou pacote do STATUS, nos passos 0 a 6, todo aprovado na
     tabela e sem pendência aberta que o cite. O STATUS provavelmente está velho: a ação é perguntar ao usuário."""
     passo = int(dados["Passo"])
     if not em_refino or not 0 <= passo <= 6:
         return None
+    if estado.origem_do_lote(dados.get(estado.CAMPO_LOTE, "")).startswith(_MIGRACAO):
+        return None
     if not all(f.aprovado(documento) and not f.citantes(documento) for documento in em_refino):
         return None
-    alvo = posixpath.basename(em_refino[0]) if len(em_refino) == 1 else f"o pacote de {len(em_refino)}"
+    alvo = posixpath.basename(em_refino[0]) if len(em_refino) == 1 else f"o {_grupo(dados)} de {len(em_refino)}"
     volta = 'harness.py estado set Documento nenhum && harness.py passo 0 --proximo "<o que vem>"'
     if dados[versao.CAMPO] != versao.SEM_VERSAO:
         volta = f"com a autorização do usuário, harness.py versao limpar && {volta}"
@@ -269,17 +290,17 @@ def _status_velho(f: _Fontes, dados: dict[str, str], em_refino: list[str]) -> It
 
 def _andamento(dados: dict[str, str], em_refino: list[str]) -> Item:
     passo = int(dados["Passo"])
-    pacote = dados.get(estado.CAMPO_PACOTE, estado.SEM_PACOTE) != estado.SEM_PACOTE
+    grupo = _grupo(dados) if estado.CAMPO_LOTE in dados or estado.CAMPO_PACOTE in dados else None
     primeiro = em_refino[0]
     nome = posixpath.basename(primeiro)
     if passo == 7:
-        commit = f"commit do pacote de {nome}" if pacote else f"commit de {nome}"
+        commit = f"commit do {grupo} de {nome}" if grupo else f"commit de {nome}"
         if _ESPERA in dados["Proximo"]:
             return Item(ANDAMENTO, f"perguntar ao usuário se libera o {commit}",
                         "passo 7 gravado; o usuário pediu para esperar o commit", primeiro)
         return Item(ANDAMENTO, f"{commit} e harness.py fechar", "passo 7 gravado; depois do commit, harness.py fechar",
                     primeiro)
-    acao = f"{_REFINAR}{primeiro} (retoma do passo {passo})" + (f" (pacote de {len(em_refino)})" if pacote else "")
+    acao = f"{_REFINAR}{primeiro} (retoma do passo {passo})" + (f" ({grupo} de {len(em_refino)})" if grupo else "")
     return Item(ANDAMENTO, acao, dados["Proximo"], primeiro)
 
 
@@ -380,6 +401,34 @@ def _pendencias_sem_documento(
     return itens
 
 
+def _definir_lotes(f: _Fontes, em_refino: list[str]) -> dict[str, list[str]]:
+    """Os lotes: a pendência aberta cujo destino cita dois ou mais aprovados (fora os em refino) dá o lote, com os
+    documentos na ordem do lote. As pendências seguem a ordem do backlog, e o documento de um lote não entra em
+    outro."""
+    aprovados = [documento for documento in f.status if f.aprovado(documento) and documento not in em_refino]
+    lotes: dict[str, list[str]] = {}
+    tomados: set[str] = set()
+    for _, id_, destino in f.pendencias:
+        documentos = [documento for documento in lote.documentos_do_destino(destino, aprovados, f.perfil)
+                      if documento not in tomados]
+        if len(documentos) >= 2 and id_ not in lotes:
+            lotes[id_] = documentos
+            tomados.update(documentos)
+    return lotes
+
+
+def _item_do_lote(f: _Fontes, id_: str, documentos: list[str]) -> Item:
+    """O item `lote`: a ação é o refino do primeiro documento, e o motivo traz o número de documentos e as camadas
+    (a posição da fase na ordem das fases)."""
+    fases = f.perfil.fases
+    camadas = [fases.index(fase) + 1 if fase is not None else len(fases) + 1
+               for fase in (f.perfil.fase_do_documento(documento) for documento in documentos)]
+    primeira, ultima = min(camadas), max(camadas)
+    faixa = f"camada {primeira}" if primeira == ultima else f"camadas {primeira} a {ultima}"
+    return Item(LOTE, _REFINAR + documentos[0], f"lote {id_}: {len(documentos)} documentos, {faixa}", documentos[0],
+                (id_,))
+
+
 def _fila(f: _Fontes, dados: dict[str, str], em_refino: list[str], marcador: str) -> list[Item]:
     """A fila da fase (§6.2, item 3), do item 0 ao gate."""
     perfil = f.perfil
@@ -458,14 +507,18 @@ def _fila(f: _Fontes, dados: dict[str, str], em_refino: list[str], marcador: str
     fila += _novos(f, marcador, [item.documento for item in fila] + em_refino)
     na_fila = {item.documento for item in fila}
     revisoes: list[Item] = []
-    for documento in f.status:
-        if not f.aprovado(documento) or documento in na_fila or documento in em_refino:
-            continue
-        com_antes = f.citantes(documento, antes=True)
-        do_gate = f.citantes(documento, marcador, com_marcador=True) if marcador else []
+    lotes = _definir_lotes(f, em_refino)
+    emitidos: set[str] = set()
+
+    def revisao(documento: str, fora: list[str]) -> tuple[Item, int | None] | None:
+        """A revisão do aprovado, sem as pendências em `fora`, e o lugar dela na fila (None: com as revisões do
+        marcador)."""
+        com_antes = [id_ for id_ in f.citantes(documento, antes=True) if id_ not in fora]
+        do_gate = [id_ for id_ in (f.citantes(documento, marcador, com_marcador=True) if marcador else [])
+                   if id_ not in fora]
         ids = [id_ for _, id_, _ in f.pendencias if id_ in com_antes or id_ in do_gate]
         if not ids:
-            continue
+            return None
         rotulos = {}
         for _, id_, destino in f.pendencias:
             if id_ in com_antes:
@@ -474,13 +527,34 @@ def _fila(f: _Fontes, dados: dict[str, str], em_refino: list[str], marcador: str
         posicao = next((indice for indice, item in enumerate(fila)
                         if item.categoria in _A_ESCREVER and posixpath.basename(item.documento) in rotulos), None)
         if posicao is not None:
-            fila.insert(posicao, Item(REVISAO_ANTES, _REFINAR + documento,
-                                      f"revisão: {comum.juntar(ids)} ({comum.juntar(rotulos.values())})",
-                                      documento, tuple(ids)))
+            return Item(REVISAO_ANTES, _REFINAR + documento,
+                        f"revisão: {comum.juntar(ids)} ({comum.juntar(rotulos.values())})",
+                        documento, tuple(ids)), posicao
+        marcas = list(rotulos.values()) + ([marcador] if set(do_gate) - set(com_antes) else [])
+        return Item(REVISAO, _REFINAR + documento, f"revisão: {comum.juntar(ids)} ({comum.juntar(marcas)})",
+                    documento, tuple(ids)), None
+
+    for documento in f.status:
+        if not f.aprovado(documento) or documento in na_fila or documento in em_refino:
+            continue
+        completa = revisao(documento, [])
+        if completa is None:
+            continue
+        do_lote = [id_ for id_ in completa[0].pendencias if documento in lotes.get(id_, ())]
+        novos = [id_ for id_ in do_lote if id_ not in emitidos]
+        for deslocamento, id_ in enumerate(novos):
+            if completa[1] is None:
+                revisoes.append(_item_do_lote(f, id_, lotes[id_]))
+            else:
+                fila.insert(completa[1] + deslocamento, _item_do_lote(f, id_, lotes[id_]))
+            emitidos.add(id_)
+        final = revisao(documento, do_lote) if do_lote else completa
+        if final is None:
+            continue
+        if final[1] is None:
+            revisoes.append(final[0])
         else:
-            marcas = list(rotulos.values()) + ([marcador] if set(do_gate) - set(com_antes) else [])
-            revisoes.append(Item(REVISAO, _REFINAR + documento, f"revisão: {comum.juntar(ids)} ({comum.juntar(marcas)})",
-                                 documento, tuple(ids)))
+            fila.insert(final[1], final[0])
     fila += revisoes
     fila += _pendencias_sem_documento(f, marcador, fila, em_refino, sorted(linkados))
     fila.append(Item(GATE, f"/{comum.PREFIXO_DAS_SKILLS}gate-fase {fase.gate}",
@@ -492,10 +566,16 @@ def _revisoes_sem_marcador(f: _Fontes, em_refino: list[str], marcador: str, gate
     """As revisões dos aprovados citados por pendência sem o marcador; as com `antes do` só com o gate aprovado, porque
     sem ele já estão na fila."""
     itens = []
+    lotes = _definir_lotes(f, em_refino)
+    emitidos: set[str] = set()
     for documento in f.status:
         if not f.aprovado(documento) or documento in em_refino:
             continue
         ids = f.citantes(documento, marcador, com_marcador=False, antes=None if gate_aprovado else False)
+        for id_ in [id_ for id_ in ids if documento in lotes.get(id_, ()) and id_ not in emitidos]:
+            itens.append(_item_do_lote(f, id_, lotes[id_]))
+            emitidos.add(id_)
+        ids = [id_ for id_ in ids if documento not in lotes.get(id_, ())]
         if ids:
             itens.append(Item(REVISAO, _REFINAR + documento, f"revisão: {comum.juntar(ids)}", documento, tuple(ids)))
     return itens
@@ -626,7 +706,12 @@ def calcular(
         dados = estado.ler(raiz / perfil.caminhos.status, perfil)
     if amb is None:
         amb = ambiente.conferir(raiz, executar)
-    em_refino = estado.documentos(dados)
+    lista_quebrada = None
+    try:
+        em_refino = estado.documentos(dados, raiz)
+    except estado.EstadoInvalido as erro:
+        lista_quebrada = erro.mensagem
+        em_refino = [] if dados["Documento"] == estado.SEM_DOCUMENTO else [dados["Documento"]]
     texto_backlog = rastreio.ler_ou_none(raiz / perfil.caminhos.backlog)
     f = _Fontes(raiz, perfil, rastreio.status_dos_artefatos(texto_backlog or "", perfil),
                 backlog.pendencias_abertas(texto_backlog or "", perfil), texto_backlog or "")
@@ -636,7 +721,10 @@ def calcular(
     gate_aprovado = dados.get(fase.gate, "").startswith(_APROVADO_EM)
 
     fila = _fila(f, dados, em_refino, marcador)
-    recomendado = _consertar(f, dados, em_refino, executar)
+    if lista_quebrada is not None:
+        recomendado = _lista_quebrada(dados, em_refino, lista_quebrada)
+    else:
+        recomendado = _consertar(f, dados, em_refino, executar)
     if recomendado is not None and amb.worktree:
         recomendado = Item(recomendado.categoria, recomendado.acao + SUFIXO_WORKTREE, recomendado.motivo,
                            recomendado.documento, recomendado.pendencias)
@@ -673,7 +761,7 @@ def _resto(itens: list[Item]) -> str:
         if numero:
             partes.append("+" + _quantos(numero, singular, plural))
     partes += [f"{posixpath.basename(item.documento)} ({item.motivo})" for item in itens
-               if item.categoria in (OBRIGATORIO, REVISAO_ANTES, NOVO)]
+               if item.categoria in (OBRIGATORIO, REVISAO_ANTES, NOVO, LOTE)]
     partes += [item.acao for item in itens if item.categoria in (PENDENCIA, GATE)]
     return _SEPARADOR.join(partes)
 
@@ -708,7 +796,9 @@ def formatar(p: Proximo, verbose: bool = False) -> str:
         for titulo, grupo in ((f"Revisões {p.marcador}", revisoes), ("Revisões sem o marcador", p.revisoes_sem_marcador)):
             if grupo:
                 linhas.append(f"{titulo} ({len(grupo)}):")
-                linhas += [f"  {item.documento}: {comum.juntar(item.pendencias)}" for item in grupo]
+                linhas += [f"  {item.documento}: "
+                           + (item.motivo if item.categoria == LOTE else comum.juntar(item.pendencias))
+                           for item in grupo]
         if p.retornos:
             linhas.append(f"Retornos com pendência ({len(p.retornos)}):")
             linhas += [f"  {retorno}" for retorno in p.retornos]

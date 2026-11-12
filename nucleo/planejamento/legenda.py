@@ -34,6 +34,15 @@ O arquivo tem três partes, cada uma com uma tabela:
 Com `--check`, só compara o arquivo, byte a byte, com o que gravaria: `legenda em dia: <caminho>`, com 0, ou
 `legenda desatualizada: rode harness.py legenda`, com 1, também para o arquivo ausente.
 
+Com `--ids "<texto>"`, não grava nada e imprime, no lugar da legenda, uma linha `<ID> (<título>)` por ID do texto e
+uma `<SIGLA> (<significado>)` por sigla, na ordem da primeira aparição e sem repetir. O título vem da primeira
+definição do ID nos artefatos da tabela, ou da célula Pendência do backlog; o ID sem definição sai com `não definido`.
+A citação de item de Aceite (`<ID>.<n>`, ou a faixa `<ID>.<n> a <ID>.<m>`) conta como o ID e leva o título depois da
+citação inteira. É para pôr ao lado do ID na primeira aparição de um texto. Não combina com `--check` e não pede `caminhos.legenda`.
+
+Com `--ids-de <arquivo>`, o mesmo, com o texto lido do arquivo, sem passar o Markdown pelo shell; o arquivo ilegível
+sai com `recusado: <arquivo> ilegível (<motivo>)` e 1.
+
 Os dois saem com 1, sem gravar, com `tipo de ID sem legenda: <tipo>`, uma linha por tipo: primeiro cada prefixo de
 `ids.prefixos` sem entrada no núcleo, na ordem do perfil; depois cada `<prefixo>-<CÓDIGO>` citado com número fora de
 bloco de código, nos artefatos da tabela, sem título que o nomeie, na ordem da primeira citação. O código de uma FN
@@ -144,6 +153,102 @@ def _artefatos(ler: Callable[[str], str | None], perfil: Perfil) -> list[tuple[s
         if texto is not None:
             artefatos.append((caminho, texto))
     return artefatos
+
+
+TAMANHO_DO_TITULO = 60
+_RE_LINK_DE_TEXTO = re.compile(r"\[([^\]]*)\]\([^)]*\)")
+
+
+def _titulo_do_id(resto: str) -> str:
+    """O título do que vem depois do ID: sem os `:`, `—`, `-` e `**` do começo, os `**`, as crases e os links, cortado
+    em `TAMANHO_DO_TITULO` caracteres com `…`, ou `SEM_TITULO` se sobra nada."""
+    resto = _RE_LINK_DE_TEXTO.sub(r"\1", resto.lstrip(" :—-*")).replace("**", "").replace("`", "")
+    resto = " ".join(resto.split())
+    if not resto:
+        return checar.SEM_TITULO
+    return resto if len(resto) <= TAMANHO_DO_TITULO else resto[:TAMANHO_DO_TITULO - 1] + "…"
+
+
+def titulos(ler: Callable[[str], str | None], perfil: Perfil) -> dict[str, str]:
+    """O ID para o título, da primeira definição dele nos artefatos da tabela, na ordem da tabela: o texto da linha
+    depois do ID, ou, na linha de tabela, a célula seguinte à do ID. As pendências trazem a célula Pendência do
+    backlog. O ID de relato fica de fora."""
+    padroes = checar._padroes(perfil)
+    achados: dict[str, str] = {}
+    for _, texto in _artefatos(ler, perfil):
+        for _, linha in checar.linhas_fora_de_blocos(texto):
+            achado = padroes.id_definido.match(linha)
+            if achado is None:
+                continue
+            id_ = f"{achado.group('prefixo')}-{achado.group('numero')}"
+            if id_ in achados or not padroes.id_no_padrao.fullmatch(id_):
+                continue
+            if linha.lstrip().startswith("|"):
+                celulas = backlog.celulas(linha)
+                posicao = next((i for i, celula in enumerate(celulas) if id_ in celula), -1)
+                achados[id_] = _titulo_do_id(celulas[posicao + 1] if 0 <= posicao < len(celulas) - 1 else "")
+            else:
+                achados[id_] = _titulo_do_id(linha[achado.end():])
+    texto_backlog = ler(perfil.caminhos.backlog)
+    if texto_backlog is not None:
+        for _, celulas in backlog._pendencias(texto_backlog, perfil):
+            if len(celulas) > 1:
+                achados.setdefault(celulas[0], _titulo_do_id(celulas[1]))
+    return achados
+
+
+def _regex_de_ids(perfil: Perfil) -> str:
+    pendencia = re.escape(perfil.ids.prefixo_pendencia)
+    # O `(?!0+$)` do padrão vale para o token inteiro; no meio do texto, o fim do ID é a borda que não é letra.
+    padrao = checar._padroes(perfil).id_no_padrao.pattern.replace("(?!0+$)", r"(?!0+(?![\w-]))")
+    return "(?:" + padrao + "|" + pendencia + "-[0-9]+)"
+
+
+def _regex_da_citacao(perfil: Perfil) -> str:
+    """O ID no grupo `id`, com a citação de item de Aceite que vier junto: `<ID>.<n>` ou a faixa `<ID>.<n> a <ID>.<m>`.
+    O ID seguido de `.<dígito>` só casa com a citação inteira, para a legenda não entrar no meio dela."""
+    return rf"(?P<id>{_regex_de_ids(perfil)})(?:\.[0-9]+(?:\s+a\s+(?P=id)\.[0-9]+)?)?(?!\.[0-9])"
+
+
+def _significados(perfil: Perfil) -> dict[str, str]:
+    significados = {sigla.sigla: sigla.nome for sigla in PARTE_1 + PARTE_3}
+    for fase in perfil.fases:
+        significados[fase.gate] = f"gate da camada {fase.id}"
+    significados[perfil.ids.prefixo_pendencia] = "pendência"
+    return significados
+
+
+def legendar(texto: str, ler: Callable[[str], str | None], perfil: Perfil) -> list[str]:
+    """As linhas `<ID> (<título>)` e `<SIGLA> (<significado>)` do texto, na ordem da primeira aparição, sem repetir.
+    O ID sem definição sai com `não definido`. A sigla dentro de um ID não conta."""
+    significados = _significados(perfil)
+    siglas = "|".join(re.escape(s) for s in sorted(significados, key=len, reverse=True))
+    procura = re.compile(rf"(?<![\w-])(?:{_regex_da_citacao(perfil)}|(?P<sigla>{siglas}))(?![\w-])")
+    por_id = titulos(ler, perfil)
+    linhas: list[str] = []
+    for achado in procura.finditer(texto):
+        chave = achado.group("id") or achado.group(0)
+        descricao = por_id.get(chave, "não definido") if achado.group("id") else significados[chave]
+        linha = f"{chave} ({descricao})"
+        if linha not in linhas:
+            linhas.append(linha)
+    return linhas
+
+
+def com_legenda(texto: str, titulos: dict[str, str], perfil: Perfil) -> str:
+    """O texto com ` (<título>)` logo depois da primeira aparição de cada ID que tem título em `titulos`; na citação
+    de item de Aceite (`<ID>.<n>`, ou a faixa `<ID>.<n> a <ID>.<m>`), depois da citação inteira."""
+    procura = re.compile(rf"(?<![\w-]){_regex_da_citacao(perfil)}(?![\w-])")
+    vistos: set[str] = set()
+
+    def juntar(achado: re.Match[str]) -> str:
+        id_, citacao = achado.group("id"), achado.group(0)
+        if id_ in vistos:
+            return citacao
+        vistos.add(id_)
+        return f"{citacao} ({titulos[id_]})" if id_ in titulos else citacao
+
+    return procura.sub(juntar, texto)
 
 
 def _linha(celulas: list[str]) -> str:

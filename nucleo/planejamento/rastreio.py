@@ -41,7 +41,8 @@ Saída, com 0 mesmo sem citação:
 - `Rulings (<n>)` e `Pendências abertas (<n>)`, estas com o ID.
 
 Sem `--verbose`, até 20 linhas, e `[20 de <total> linhas; --verbose mostra todas, com o trecho]` quando há mais; com
-ele, todas, com a seção e o trecho. Alvo vazio: `recusado: alvo vazio`, com 1.
+ele, todas, com a seção e o trecho. Com `--gravar`, a saída vai também para `.claude/harness/dossie/afetados.txt`, para
+o revisor, e a última linha é `Gravado: .claude/harness/dossie/afetados.txt`. Alvo vazio: `recusado: alvo vazio`, com 1.
 """
 
 APROVADO = "aprovado"

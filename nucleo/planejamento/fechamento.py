@@ -1,6 +1,7 @@
 """Fechamento do ciclo depois do commit (spec 4a, §7): confere a versão marcada no HEAD e fecha o STATUS.md numa
-escrita só. Nessa escrita, o `Documento` volta a `nenhum`, o `Passo` e a `Rodada` voltam a 0, a marcação e o `Pacote`
-saem e o `Proximo` recebe o próximo passo calculado; depois, as cópias da aprovação são apagadas.
+escrita só. Nessa escrita, o `Documento` volta a `nenhum`, o `Passo` e a `Rodada` voltam a 0, a marcação, o `Pacote`
+e o `Lote` saem e o `Proximo` recebe o próximo passo calculado; depois, as cópias da aprovação e a lista do lote são
+apagadas.
 
 Com a versão no HEAD, nada se perde, e por isso o fechamento dispensa a autorização do usuário que o `versao limpar`
 avulso pede. Toda recusa sai antes de gravar.
@@ -16,20 +17,23 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import comum
+import dossie
 import estado
 import proximo
 import versao
 from perfil import Perfil
 
 AJUDA = """\
-Fecha o ciclo do documento ou do pacote no passo 7, depois do commit, conferindo a versão marcada no HEAD.
+Fecha o ciclo do documento, do pacote ou do lote no passo 7, depois do commit, conferindo a versão marcada no HEAD.
 
 Confere que cada documento em refino está no HEAD igual ao disco, pelo `git show` e pelo `git cat-file --filters`,
-que aplica o `core.autocrlf`, e que o hash dele, ou o do manifesto refeito no pacote, é o `Versao-aprovacao`; vale
-noutra máquina, sem as cópias. Então grava numa escrita só `Versao-aprovacao: —`, `Documento: nenhum`, sem `Pacote`,
-`Passo: 0`, `Rodada: 0` e o `Proximo` (o `--proximo`, ou a ação do `harness.py proximo`), apaga as cópias da
-aprovação e imprime `Fechado: <documento> (<hash> no HEAD <commit>)` e `Proximo = <texto>`, com 0. Num pacote, o
-documento vira `pacote de <N> documentos`. Não pede autorização: com a versão no HEAD, nada se perde.
+que aplica o `core.autocrlf`, e que o hash dele, ou o do manifesto refeito no pacote ou no lote, é o
+`Versao-aprovacao`; vale noutra máquina, sem as cópias. Então grava numa escrita só `Versao-aprovacao: —`,
+`Documento: nenhum`, sem `Pacote` e sem `Lote`, `Passo: 0`, `Rodada: 0` e o `Proximo` (o `--proximo`, ou a ação do
+`harness.py proximo`), apaga as cópias da aprovação, a lista do lote e a saída gravada do `afetados` e imprime
+`Fechado: <documento> (<hash> no HEAD <commit>)` e `Proximo = <texto>`, com 0. Num pacote, o documento vira
+`pacote de <N> documentos`; num lote, `lote <origem> de <N> documentos`. Não pede autorização: com a versão no HEAD,
+nada se perde.
 
 Depois, faz o `git add` do `STATUS.md` e o commit dele. Quando o HEAD mudou um documento do ciclo e nenhuma outra
 branch, local ou remota (pela referência do último fetch), contém o HEAD, sai o `git commit --amend --no-edit`; nos
@@ -63,9 +67,9 @@ _TEMPO_LIMITE_COMMIT = 60
 
 @dataclass(frozen=True)
 class Fechado:
-    """O que fechou: o caminho do documento, ou `pacote de <N> documentos`; o hash marcado; o commit curto do HEAD em
-    que a versão foi conferida; o texto gravado no `Proximo`. Depois, o commit curto com o `STATUS.md` e o modo
-    (`amend` ou `chore`), ou, se o commit falhou, o motivo em `falha_do_commit`."""
+    """O que fechou: o caminho do documento, `pacote de <N> documentos` ou `lote <origem> de <N> documentos`; o hash
+    marcado; o commit curto do HEAD em que a versão foi conferida; o texto gravado no `Proximo`. Depois, o commit
+    curto com o `STATUS.md` e o modo (`amend` ou `chore`), ou, se o commit falhou, o motivo em `falha_do_commit`."""
 
     descricao: str
     hash: str
@@ -160,9 +164,12 @@ def fechar(
     marcado = dados[versao.CAMPO]
     if marcado == versao.SEM_VERSAO:
         raise FechamentoRecusado("nenhuma versão marcada")
-    documentos = estado.documentos(dados)
     try:
-        head = versao.no_head(raiz, documentos, executar)
+        documentos = estado.documentos(dados, raiz)
+    except estado.EstadoInvalido as erro:
+        raise FechamentoRecusado(f"STATUS.md inválido: {erro.mensagem}") from None
+    try:
+        head = versao.no_head(raiz, documentos, executar, grupo=versao.em_grupo(dados))
     except versao.VersaoInvalida as erro:
         raise FechamentoRecusado(erro.mensagem) from None
     if head.fora_do_commit:
@@ -176,7 +183,7 @@ def fechar(
         )
     _indice_so_com_o_status(raiz, perfil, executar)
 
-    fechados = {campo: valor for campo, valor in dados.items() if campo != estado.CAMPO_PACOTE}
+    fechados = {campo: valor for campo, valor in dados.items() if campo not in estado.CAMPOS_OPCIONAIS}
     fechados.update({"Documento": estado.SEM_DOCUMENTO, "Passo": "0", "Rodada": "0", versao.CAMPO: versao.SEM_VERSAO})
     if proximo_texto is None:
         proximo_texto = proximo.calcular(raiz, perfil, dados=fechados, executar=executar).linha_curta
@@ -184,6 +191,7 @@ def fechar(
         versao.CAMPO: versao.SEM_VERSAO,
         "Documento": estado.SEM_DOCUMENTO,
         estado.CAMPO_PACOTE: estado.SEM_PACOTE,
+        estado.CAMPO_LOTE: estado.SEM_PACOTE,
         "Passo": "0",
         "Rodada": "0",
         "Proximo": proximo_texto,
@@ -193,6 +201,12 @@ def fechar(
     except estado.EstadoInvalido as erro:
         raise FechamentoRecusado(erro.mensagem) from None
     versao.apagar_copias(raiz)
-    descricao = documentos[0] if len(documentos) == 1 else f"pacote de {len(documentos)} documentos"
+    estado.apagar_lista_do_lote(raiz)
+    (raiz / dossie.ARQUIVO_AFETADOS).unlink(missing_ok=True)
+    if estado.CAMPO_LOTE in dados:
+        origem = estado.origem_do_lote(dados[estado.CAMPO_LOTE])
+        descricao = f"lote {origem} de {len(documentos)} documento" + ("" if len(documentos) == 1 else "s")
+    else:
+        descricao = documentos[0] if len(documentos) == 1 else f"pacote de {len(documentos)} documentos"
     commit_do_status, modo, falha = _commit_do_status(raiz, perfil, documentos, descricao, executar)
     return Fechado(descricao, marcado, head.commit, proximo_texto, commit_do_status, modo, falha)

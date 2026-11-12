@@ -109,9 +109,9 @@ def _ciclo(perfil: Perfil) -> list[str]:
         "o commit convencional do projeto sai sem nova pergunta, seguido de `harness.py fechar`, a menos que o "
         "usuário peça para esperar.",
         "",
-        "Pacote: um documento e os que ele cria, ou, em modo revisão, os aprovados que uma pendência cita no destino, "
-        "passam juntos pelos sete passos, com uma checagem, um revisor e uma aprovação para todos; o "
-        f"`{status}` traz a lista na linha `Pacote`.",
+        "Pacote: um documento e os que ele cria passam juntos pelos sete passos, com uma checagem, um revisor e "
+        f"uma aprovação para todos; o `{status}` traz a lista na linha `Pacote`. O lote é a revisão, num ciclo só, "
+        f"dos aprovados que o destino de uma pendência cita; o `{status}` traz a origem dele na linha `Lote`.",
         "",
         "A aprovação de um documento ou de um pacote autoriza só o commit dele, não o próximo nem o gate.",
     ]

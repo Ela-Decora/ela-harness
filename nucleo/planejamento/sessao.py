@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import posixpath
 import subprocess
+from pathlib import Path
 
 import ambiente
 import comum
@@ -39,14 +40,16 @@ def fonte(entrada: str) -> str:
     return valor if isinstance(valor, str) and valor else FONTE_PADRAO
 
 
-def _documento(dados: dict[str, str]) -> str:
-    """`nenhum documento`, ou o nome do documento em refino com o passo; com pacote, quantos mais há nele."""
-    documentos = estado.documentos(dados)
+def _documento(dados: dict[str, str], raiz: Path) -> str:
+    """`nenhum documento`, ou o nome do documento em refino com o passo; com pacote ou lote, quantos mais há nele.
+    Lança EstadoInvalido com a lista do lote ilegível."""
+    documentos = estado.documentos(dados, raiz)
     if not documentos:
         return "nenhum documento"
     nome = posixpath.basename(documentos[0])
     if len(documentos) > 1:
-        nome += f" (+{len(documentos) - 1} no pacote)"
+        grupo = "lote" if estado.CAMPO_LOTE in dados else "pacote"
+        nome += f" (+{len(documentos) - 1} no {grupo})"
     return f"{nome} (passo {dados['Passo']})"
 
 
@@ -71,8 +74,13 @@ def _montar(executar) -> tuple[str, str]:
             primeira = f"Planejamento: erro ao calcular o próximo passo: {type(erro).__name__}: {_uma_linha(str(erro))}"
         else:
             linhas_do_proximo = proximo.linhas_do_hook(calculado)
-            primeira = (f"Planejamento{_SEPARADOR}{dados['Fase']}{_SEPARADOR}{_documento(dados)}{_SEPARADOR}"
-                        f"Próximo: {calculado.linha_curta}")
+            try:
+                documento = _documento(dados, raiz)
+            except estado.EstadoInvalido as erro:
+                primeira = f"Planejamento: STATUS.md inválido: {_uma_linha(erro.mensagem)}"
+            else:
+                primeira = (f"Planejamento{_SEPARADOR}{dados['Fase']}{_SEPARADOR}{documento}{_SEPARADOR}"
+                            f"Próximo: {calculado.linha_curta}")
     avisos = [item.linha for item in amb.avisos]
     contexto = "\n".join([bloco.rstrip("\n"), *linhas_do_proximo, *avisos])
     aviso = primeira + (f"\nAmbiente: {_SEPARADOR.join(avisos)}" if avisos else "")

@@ -73,7 +73,7 @@ Com a palavra do usuário, numa chamada só, os `set` encadeados por `&&`, nesta
 
 O script só deixa a `Fase` avançar depois do gate aprovado, por isso o gate vem primeiro; a fase nova já sai com o gate dela em `pendente`. No último gate, a `Fase` fica: tire o `set Fase` da cadeia.
 
-No arquivo de decisões, na seção de aprovações: data, gate, a resposta do usuário entre aspas, o veredito ("FAIL com dispensa dos itens N" quando houve dispensa), os itens com atenção e cada dispensa com o motivo. Pendência dispensada continua `aberta`, com o destino trocado pelo que o motivo disser.
+No arquivo de decisões, na seção de aprovações: data, gate, a resposta do usuário entre aspas, o veredito ("FAIL com dispensa dos itens N" quando houve dispensa), os itens com atenção e cada dispensa com o motivo. Pendência dispensada continua `aberta`, com o destino trocado por `harness.py backlog destino <prefixo>-NN "<destino>" --dispensa "<motivo>"`.
 
 Com o item do leitor frio, a linha de aprovação cita o caminho do gabarito, o gabarito entra no commit do gate, e as medições da linha `leitor:` (tempo, tokens, custo, turnos e negações) entram por `harness.py registrar medicao "<medição>" "<valor>"`.
 

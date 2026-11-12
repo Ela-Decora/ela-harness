@@ -259,7 +259,7 @@ ou um termo do texto. As chaves e as regras estão em [perfil](referencia.md#per
 
 **Quando:** há diagramas Mermaid no planejamento ou, com `[der]` no perfil, o DDL. Na raiz, copie o workflow do plugin e commite:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Ela-Decora/ela-harness/v0.4.0/ci/planejamento/diagramas.yml -o .github/workflows/diagramas.yml
+curl -fsSL https://raw.githubusercontent.com/Ela-Decora/ela-harness/v0.4.1/ci/planejamento/diagramas.yml -o .github/workflows/diagramas.yml
 ```
 O check `diagramas` valida o Mermaid de `caminhos.planejamento` e, com `[der]`, o DDL num MySQL e num Postgres, pela `ref`
 do `.claude/settings.json`. O `harness.py gerar` reescreve o `harness.yml` inteiro: o CI a mais vai em workflow próprio.
@@ -272,26 +272,26 @@ vez por projeto, numa branch com PR ou, no planejamento sem PR, no ramo de traba
 1. Na raiz, troque o marketplace; os `install` devolvem os plugins que o `remove` tira, o último só no desenvolvimento:
    ```bash
    claude plugin marketplace remove ela-harness --scope project
-   claude plugin marketplace add Ela-Decora/ela-harness#v0.4.0 --scope project
+   claude plugin marketplace add Ela-Decora/ela-harness#v0.4.1 --scope project
    claude plugin install ela-harness@ela-harness --scope project
    claude plugin install ela-harness-papeis@ela-harness --scope project
    ```
 2. Faça o passo de migração da versão, no [`CHANGELOG.md`](../CHANGELOG.md). Vindo da origem, declare no desenvolvimento a stack em
    `[desenvolvimento.ci] instalar`, como `["corepack enable", "pnpm install --frozen-lockfile"]`; o banco, com `docker compose up -d`.
-3. Feche as sessões do Claude Code abertas no projeto: os hooks delas refazem o link para o núcleo velho. Apague o link,
-   `rm -f .claude/harness/nucleo`, e, numa sessão nova ou no terminal, rode `harness.py gerar` e `harness.py gerar --check`.
-4. Commite e tire o `harness.yml` do robô de dependências: `exclude-paths: [".github/workflows/harness.yml"]` no
+3. Feche as sessões do Claude Code abertas no projeto: os hooks delas refazem o link para o núcleo velho. Apague-o
+   (`rm -f .claude/harness/nucleo`) e, numa sessão nova ou no terminal, rode `harness.py gerar` e `gerar --check`.
+4. No planejamento, rode `harness.py migrar --de v<versão de antes desta atualização>` (só `harness.py migrar`, se já
+   há uma registrada) e siga o lote que ele abrir, pela `/ela-harness:refinar-documento`; sem correção, ele só registra.
+5. Commite e tire o `harness.yml` do robô de dependências: `exclude-paths: [".github/workflows/harness.yml"]` no
    Dependabot, ou `{ "matchFileNames": [".github/workflows/harness.yml"], "enabled": false }` no `packageRules` do Renovate.
    Com o CI verde, apague o segredo `ELA_HARNESS_TOKEN`, se havia; depois do merge, rode `git merge main` em cada lane.
 
 **Se der errado:**
-- `harness.yml: o plugin carregado é v<X> ...` ou `harness.yml: o .claude/settings.json não fixa ...`: refaça o 1 e o 3.
-- `plugin: falta` no `harness.py iniciar --conferir`, que é do desenvolvimento: o settings ainda aponta a origem; refaça o 1.
+- `harness.yml: o plugin carregado é v<X> ...`, `... não fixa ...` ou `plugin: falta` (do `iniciar --conferir`): refaça o 1 e o 3.
 - `<nome>: a saída diz que falta o comando <cmd>`, no CI: declare-o no passo 2. O `harness.yml` gerado não leva `secrets`.
 
 ## Relatar um problema
 
-**Quando:** um comando falha sem dizer o que fazer, uma saída contradiz o manual ou falta uma peça. Abra uma issue em
+**Quando:** um comando falha sem dizer o que fazer ou uma saída contradiz o manual. Abra uma issue em
 [`Ela-Decora/ela-harness`](https://github.com/Ela-Decora/ela-harness/issues); pull request de fora não entra. Traga a
-versão (a `ref` do `.claude/settings.json`), a trilha, o comando ou a skill e a saída, sem nomes, dados nem segredos do
-projeto. A correção chega numa versão nova: [Atualizar o plugin](#atualizar-o-plugin).
+versão (a `ref` do `.claude/settings.json`), a trilha, o comando ou a skill e a saída, sem nomes, dados nem segredos do projeto.

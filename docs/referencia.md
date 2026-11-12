@@ -56,6 +56,7 @@ Gerado por `harness.py referencia --gravar`. Não edite este arquivo: mude a `AJ
 | [`afetados`](#afetados) | lista quem cita um ID ou um termo, pelo status do documento |
 | [`registrar`](#registrar) | acrescenta no ato um Ruling, uma pendência, uma nota, um relato ou um registro do passo 7 |
 | [`passo`](#passo) | fecha um passo do ciclo: grava o STATUS.md e o status do artefato |
+| [`migrar`](#migrar) | migra os documentos aprovados para a forma da versão do plugin e abre o lote de migração |
 | [`molde`](#molde) | imprime o molde de um documento de planejamento |
 | [`der`](#der) | gera e confere o DDL e o diagrama do DER físico |
 | [`versao`](#versao) | marca, confere e limpa a versão enviada para aprovação |
@@ -88,7 +89,7 @@ Valida e imprime o STATUS.md, o estado curto do planejamento (`caminhos.status`)
 Sem ação, imprime o arquivo em texto canônico e sai com 0; espaço no fim da linha, linha em branco e quebra de linha
 do Windows passam. Arquivo inválido sai com 1 e `STATUS.md inválido: <erro>; <erro>`. O formato é o título fixo e um
 campo por linha, nesta ordem, em até 2.000 caracteres; os gates do perfil ficam numa linha só, na ordem das fases, e o
-`Pacote`, opcional, vem logo depois do `Documento`. Um projeto novo começa assim:
+`Pacote` e o `Lote`, opcionais, vêm logo depois do `Documento`, nessa ordem. Um projeto novo começa assim:
 
 ```text
 # Status do planejamento
@@ -110,6 +111,7 @@ com cada mudança automática numa linha a mais. Recusa sai com 1 e `recusado: <
 | `Fase` | o `id` de uma fase do perfil |
 | `Documento` | `nenhum`, ou um `.md` dentro da pasta do planejamento, com caminho normalizado e sem espaço |
 | `Pacote` | de 2 a 6 caminhos como o do `Documento`, separados por um espaço, sem repetição; `—` tira a linha |
+| `Lote` | `<prefixo de pendência>-NN (<N> documentos)` ou `migração v<de>→v<para> (<N> documentos)`, com `(1 documento)` no singular; só pelo `estado lote`, pelo `migrar` e pelo `fechar` |
 | `Passo` | inteiro de 0 a 7 |
 | `Rodada` | inteiro maior ou igual a 0 |
 | `Proximo` | uma linha, até 200 caracteres |
@@ -123,6 +125,17 @@ com cada mudança automática numa linha a mais. Recusa sai com 1 e `recusado: <
   `Documento` ou o `Pacote` com versão marcada é recusado até `versao limpar`.
 - O `Pacote` grava também o `Documento`, o primeiro da lista, e a trava de fase vale para cada documento dele.
   `Documento nenhum` tira o `Pacote`; outro `Documento` com pacote aberto é recusado.
+- A lista dos documentos do `Lote` fica fora do STATUS.md, no arquivo `lote` da pasta da aprovação
+  (`.claude/harness/aprovacao/lote`), um caminho por linha, e o `Documento` é o primeiro dela. O `Lote` e o `Pacote`
+  não se abrem juntos. `Documento nenhum` tira também o `Lote` e deixa o arquivo, que sem o campo ninguém lê.
+- O `set` do `Lote` é recusado com `recusado: Lote muda só por estado lote, migrar ou fechar`.
+- `estado lote <prefixo>-NN <caminho>...` abre o lote da pendência aberta: confere que o destino dela cita cada
+  caminho pelo nome do arquivo, sem os trechos `antes do`, e recusa, de uma vez, os que ele não cita, com
+  `<caminho> não está no destino da <ID>`, e os que não estão aprovados na tabela de artefatos, com `<caminho> não
+  está aprovado; o lote só revisa aprovados`, uma linha `recusado:` cada. Os caminhos entram em ordem de camada e, na
+  camada, na ordem do destino, qualquer que seja a ordem passada; o que o destino não cita não entra. Grava a lista, o
+  `Lote` e o `Documento` (o primeiro) e imprime o `Lote`, o `Documento` e um caminho por linha. `estado lote --tirar
+  <caminho>` tira um documento do lote aberto, e o lote seguinte nunca fica vazio.
 - O `set` do `Versao-aprovacao` é recusado com
   `recusado: Versao-aprovacao muda só por versao marcar, versao limpar, passo 6 ou fechar`.
 - Valor vazio, com espaço no fim ou com quebra de linha é recusado; o que começa por `-` vai depois de `--`. Valor
@@ -139,9 +152,11 @@ onde a sessão vem. O `systemMessage` é o aviso ao usuário, no formato do mold
 `nucleo/comum/saida.md`, e não sai depois de compactar. O `additionalContext` é o contexto do modelo, em até
 2.000 caracteres, com:
 
-1. o STATUS.md em texto canônico; num pacote, a linha do `Documento` ganha `(+<N> no pacote)`;
+1. o STATUS.md em texto canônico; num pacote, a linha do `Documento` ganha `(+<N> no pacote)`, e num lote,
+   `(+<N> no lote)`; com a lista do lote ilegível, vem logo depois dele a linha `ERRO na lista do lote: <motivo>`;
 2. `Pendências abertas: <n> (<backlog>)`, com `—` quando o backlog falta ou não se lê;
-3. `[A CONFIRMAR] no documento atual: <n>`, ou `[A CONFIRMAR] no pacote: <n>`, com `—` sem documento legível;
+3. `[A CONFIRMAR] no documento atual: <n>`, ou `[A CONFIRMAR] no pacote: <n>` ou `no lote: <n>`, com `—` sem
+   documento legível;
 4. `Estudos com decisão por registrar: <n> (<pasta>)`, com os ilegíveis, só quando há algum;
 5. `Últimos commits:` e as três linhas do `git log --oneline`, ou `Últimos commits: indisponível`;
 6. `Próximo: <ação> (<motivo>)`, como no `harness.py proximo`, e `Depois:` com até duas ações da fila;
@@ -164,6 +179,17 @@ muda um campo do STATUS.md, validando antes de gravar
 |---|---|---|
 | `<campo>` | sim | nome do campo, como Passo ou um gate |
 | `<valor>` | sim | o valor novo, numa linha |
+
+### estado lote
+
+abre o lote de uma pendência com os documentos que o destino cita, ou tira um dele
+
+`harness.py estado lote [<argumento>...] [--tirar]`
+
+| Argumento ou opção | Obrigatório | O que é |
+|---|---|---|
+| `<argumento>...` | não | &lt;prefixo>-NN e os caminhos dos documentos; com --tirar, só o caminho a tirar |
+| `--tirar` | não | tira o documento do lote aberto |
 
 ## backlog
 
@@ -198,9 +224,16 @@ por linha; os IDs com erro, que vêm abaixo como no `backlog ids`; `<prefixo>-NN
 dela se resolveu. Imprime `<prefixo>-NN com destino <destino> em <backlog>:<linha>`. O ID casa pelo número. Recusa sai
 com 1 e `recusado: <motivo>`, sem gravar: o `destino` vazio, com quebra de linha ou com `|`; o destino novo que perde o
 marcador de um gate (`gates.<gate>.marcador_pendencia`) que o antigo tinha, sem distinção de maiúsculas, com
-`o destino novo perde "<marcador>", que segura o <gate>`; o destino igual ao atual, com `destino: igual ao atual`; os
-IDs com erro, abaixo como no `backlog ids`; `<prefixo>-NN não está no backlog`; `<prefixo>-NN não está aberta:
-<status>`; `<prefixo>-NN não tem a célula de destino`.
+`o destino novo perde "<marcador>", que segura o <gate>; na dispensa do gate, use --dispensa "<motivo>"`; o destino
+igual ao atual, com `destino: igual ao atual`; o destino novo que cita um documento do lote aberto (o primeiro, na
+ordem do lote), com `<documento> está no lote aberto; o que resta dele se resolve neste ciclo`; os IDs com erro,
+abaixo como no `backlog ids`; `<prefixo>-NN não está no backlog`; `<prefixo>-NN não está aberta: <status>`;
+`<prefixo>-NN não tem a célula de destino`.
+
+`backlog destino --dispensa "<motivo>"` deixa o destino novo perder o marcador do primeiro gate, na ordem do perfil, que
+o antigo tinha, e acrescenta `; <AAAA-MM-DD>: dispensada no <gate>: <motivo>; destino era <destino antigo>` ao status. O
+`--dispensa` sem marcador perdido é recusado, com `--dispensa só vale quando o destino novo perde o marcador de um
+gate`, e o motivo vazio, com quebra de linha ou com `|` também.
 
 O `--em` é o caminho a partir da raiz, como `CLAUDE.md` ou `<pasta do planejamento>/<fase>/<documento>.md`, ou só o
 nome do arquivo, quando ele é único entre os arquivos que o git não ignora, com commit ou sem.
@@ -255,12 +288,13 @@ marca uma pendência aberta como resolvida, com o documento e como
 
 leva o destino de uma pendência aberta ao que resta
 
-`harness.py backlog destino <pendência> <destino>`
+`harness.py backlog destino <pendência> <destino> [--dispensa <motivo>]`
 
 | Argumento ou opção | Obrigatório | O que é |
 |---|---|---|
 | `<pendência>` | sim | o ID, como &lt;prefixo>-NN |
 | `<destino>` | sim | o destino novo: os documentos que restam, com os marcadores do antigo |
+| `--dispensa <motivo>` | não | o motivo da dispensa do gate, quando o destino novo perde o marcador dele; sem \| |
 
 ## checar
 
@@ -397,6 +431,12 @@ extras, depois das seis e das regras do perfil; o pre-commit não as roda:
   ou com arquivo listado que não existe. Com o formato inválido, `der-rastreio` e `der-em-dia` falham com
   `formato do DER inválido; corrija o der-formato antes`.
 
+Uma verificação que entrou numa versão do plugin depois da aprovação só avisa no documento `aprovado` na tabela de
+artefatos: a linha é `<nome>: AVISO: <n> ocorrências, verificação da v<x>, posterior à aprovação`, sem sair com 1.
+Vale quando nenhuma migração registrada no arquivo de decisões chegou à `v<x>`, ou quando a data da aprovação na
+tabela é anterior à da migração que chegou. Fora disso, e em documento que não está `aprovado`, falha como as outras.
+Nesta versão, nenhuma verificação entra nessa regra. O `checar-aprovados` do pre-commit a segue.
+
 Recusas do documento, numa linha: `documento fora de <pasta>/: <documento>`, `documento não encontrado: <caminho>`,
 `molde não encontrado: <caminho>` e as de arquivo fora de UTF-8 ou ilegível.
 
@@ -446,12 +486,13 @@ argumento, ou com documento fora da pasta do planejamento (`documento fora de <p
 
 lista quem cita um ID ou um termo, pelo status do documento
 
-`harness.py afetados <alvo>... [--verbose]`
+`harness.py afetados <alvo>... [--verbose] [--gravar]`
 
 | Argumento ou opção | Obrigatório | O que é |
 |---|---|---|
 | `<alvo>...` | sim | um ID de requisito ou de pendência, ou um termo entre aspas |
 | `--verbose` | não | mostra todas as linhas, com o trecho |
+| `--gravar` | não | grava a saída em .claude/harness/dossie/afetados.txt, para o revisor |
 
 Lista quem cita cada alvo, um ID ou um termo, agrupado pelo status do documento na tabela de artefatos.
 
@@ -477,7 +518,8 @@ Saída, com 0 mesmo sem citação:
 - `Rulings (<n>)` e `Pendências abertas (<n>)`, estas com o ID.
 
 Sem `--verbose`, até 20 linhas, e `[20 de <total> linhas; --verbose mostra todas, com o trecho]` quando há mais; com
-ele, todas, com a seção e o trecho. Alvo vazio: `recusado: alvo vazio`, com 1.
+ele, todas, com a seção e o trecho. Com `--gravar`, a saída vai também para `.claude/harness/dossie/afetados.txt`, para
+o revisor, e a última linha é `Gravado: .claude/harness/dossie/afetados.txt`. Alvo vazio: `recusado: alvo vazio`, com 1.
 
 ## registrar
 
@@ -507,7 +549,8 @@ antes, a nota numa pendência aberta de mesmo destino.
 `registrar nota` acrescenta `; <AAAA-MM-DD>: <nota>` ao fim da célula de status de uma pendência aberta, sem mexer no
 resto da linha, e imprime `<prefixo>-NN anotada em <arquivo>:<linha>`. O ID casa pelo número, de modo que `<prefixo>-3`
 acha a `<prefixo>-03`. Recusa nota vazia, com quebra de linha ou com `|`, pendência fora do backlog ou que não está
-aberta, e IDs com erro. O que sobra noutro documento começa a nota por `resta em <documento>: `.
+aberta, e IDs com erro. O que sobra noutro documento começa a nota por `resta em <documento>: `. A nota `resta em <documento>` de um documento do lote
+aberto é recusada: o que resta dele se resolve no ciclo.
 
 ```text
 - <AAAA-MM-DD> Ruling: <decisão> — <por quê> — <custo se errado>.
@@ -667,19 +710,67 @@ Efeito além do STATUS.md, nos documentos em refino (o `Pacote`, ou o `Documento
 - passo 7: status `aprovado`, com a data de hoje, só se o `versao conferir` der OK e houver mensagem do usuário
   depois da última marcação (a `resposta` que a guarda grava).
 
+No lote de migração (`Lote: migração v<de>→v<para>`, aberto pelo `migrar`), os passos 5 e 7 não mexem na tabela de
+artefatos: os documentos seguem `aprovado`, com a data de antes. O passo 7 grava, no lugar, a linha
+`- <data> migração v<de>→v<para>: <N> documentos` na seção de aprovações do arquivo de decisões (o `registrar
+aprovacao`), depois das conferências e antes do STATUS.md.
+
 Só o documento numa pasta de fase entra na tabela de artefatos; sem linha, ganha uma no fim dela. Tudo é conferido
 antes de gravar; o backlog é gravado antes do STATUS.md e volta ao texto anterior se o STATUS.md não gravar. No
 passo 6, a marcação fica se a gravação dos campos falhar depois, e repetir o comando é seguro.
 
 Saída, com 0: `Passo = <n>; Rodada = <r>; Proximo = <texto>`, com `Versao-aprovacao = <hash>; ` antes no passo 6;
-uma linha `backlog: <documento> = <status> em <AAAA-MM-DD>` por documento gravado; e, no passo 7, a mensagem do
-usuário que valeu como aprovação, `prova: mensagem das <hora>: «<trecho>»`.
+uma linha `backlog: <documento> = <status> em <AAAA-MM-DD>` por documento gravado; no passo 7, a mensagem do
+usuário que valeu como aprovação, `prova: mensagem das <hora>: «<trecho>»`; e, no lote de migração,
+`decisões: migração v<de>→v<para> registrada em <arquivo de decisões>:<linha>`.
 
 Recusas, com 1 e nada gravado, depois de `recusado: `: `com Documento nenhum, só o passo 0 é aceito`;
 `a versão em aprovação não confere; nada foi gravado`, seguida da saída do `versao conferir`;
 `nenhuma mensagem do usuário depois da última marcação (<hash>); apresente a versão e espere a resposta`;
 `STATUS.md inválido: <motivo>`, `backlog ilegível: <motivo>`, `backlog sem a tabela de artefatos (...)`, as do
-`estado set` e, no passo 6, as do `versao marcar`, como `arquivo não existe: <documento>`.
+`estado set` e, no passo 6, as do `versao marcar`, como `arquivo não existe: <documento>`; no passo 7 do lote de
+migração, as do `registrar aprovacao`, como a falta da seção de aprovações.
+
+## migrar
+
+migra os documentos aprovados para a forma da versão do plugin e abre o lote de migração
+
+`harness.py migrar [--de <versão>]`
+
+| Argumento ou opção | Obrigatório | O que é |
+|---|---|---|
+| `--de <versão>` | não | a versão de partida, como v0.4.0; sem ela, a da última migração registrada no arquivo de decisões |
+
+Migra os documentos aprovados para a forma da versão do plugin carregado e registra a migração.
+
+Só no planejamento, fora de um ciclo. Os documentos são os da tabela de artefatos, nas pastas de fase, com o status
+`aprovado`; cada um tem de estar no HEAD, sem mudança fora do commit. A versão de partida é a `--de`, ou a da última
+linha `migração v<de>→v<para>` da seção de aprovações do arquivo de decisões; a de chegada é a do plugin.
+
+Aplica as correções de forma cuja versão está entre as duas, e as que valem sempre. Hoje há uma, `item-de-aceite`: a
+citação `<ID>.<n>` (ou a faixa `<ID>.<n> a <ID>.<m>`) do item de Aceite que outro documento renumerou segue o item de
+texto igual de hoje. Sem item igual, ou com mais de um, a citação fica e sai um aviso. A citação por número de linha
+não tem correção.
+
+Sem correção, grava `- <data> migração v<de>→v<para>: nada a corrigir` na seção de aprovações do arquivo de decisões e
+imprime `nada a corrigir; migração v<de>→v<para> registrada`; se a última migração registrada já chega a `v<para>`, não
+grava de novo e imprime `nada a corrigir; migração até v<para> já registrada`. Com correção, grava os textos e abre o
+lote de migração com os documentos corrigidos: `Lote: migração v<de>→v<para> (<N> documentos)`, `Passo: 3` e
+`Proximo: lote de migração: passo 4, harness.py checar`. O ciclo segue pela `/ela-harness:refinar-documento`, com o critério forma no
+revisor. Nos passos 5 e 7 a tabela de artefatos não muda: os documentos seguem `aprovado`, com a data de antes. O
+passo 7 grava a linha `- <data> migração v<de>→v<para>: <N> documentos` no arquivo de decisões, e o commit é
+`docs(planejamento): migração v<de>→v<para>, <N> documentos`, com `1 documento` no singular, também na linha.
+
+Saída, com 0: uma linha `<documento>: <k> correções (<nome da correção>)` por documento corrigido, uma por aviso e,
+com o lote aberto, as linhas `Lote = ...`, `Documento = ...`, `Passo = 3`, `Rodada = 0` e `Proximo = ...`.
+
+Recusas, com 1 e nada gravado, depois de `recusado: `: `ciclo aberto (<Documento>); feche-o antes de migrar`,
+`ciclo aberto (pacote de <N> documentos)`, `ciclo aberto (lote <origem>)`;
+`nenhuma migração registrada; passe --de v<versão da última atualização>`;
+`--de: esperado v<maior>.<menor>.<correção>, encontrado "<texto>"`;
+`--de v<versão> é posterior à versão do plugin, v<versão>`; `<documento> tem mudança fora do commit; faça o commit
+antes` (`<a>, <b> têm ...` com mais de um); `git indisponível: <motivo>`; `STATUS.md inválido: <motivo>`,
+`backlog ilegível: <motivo>`, e as do `estado` e do `registrar aprovacao`.
 
 ## molde
 
@@ -779,7 +870,20 @@ Marca, confere e limpa a versão do documento, ou do pacote, enviada para aprova
   `cópia restaurada do commit <commit>`, ou, sem achá-la, dá a linha
   `versão marcada ausente da cópia e dos últimos 50 commits do arquivo`; com o mesmo hash, ou sem o git, avisa
   `cópia ausente, comparado só o hash`.
-- `limpar`: volta o campo para `—` e apaga as cópias, o manifesto, a `resposta` e o histórico.
+- `limpar`: volta o campo para `—` e apaga as cópias, o manifesto, a `resposta` e o histórico; a lista do lote fica.
+- `resumo`: o esqueleto das mudanças dos documentos em refino contra o HEAD, por documento e seção (`alterada (+a −r)`,
+  `nova`, `removida`) e os IDs que entraram, saíram ou mudaram; o documento fora do HEAD é `novo`. Grava o diff de cada
+  camada com mudança em `.claude/harness/dossie/diff-camada-<N>.diff` e cria a pasta `.harness-aprovacao/`, com um
+  `.gitignore` de `*`, para o resumo escrito em `.harness-aprovacao/resumo.md`, fora do `.claude/`, onde o Claude Code
+  pede permissão a cada escrita. `--desde-marcada` compara com a cópia marcada e,
+  sem ela, recusa. Sem mudança: `nenhuma mudança contra o HEAD`, ou `contra a versão marcada`. Com
+  `--conferir <arquivo>`, confere as linhas `Onde: <documento> · <seção>` do resumo escrito contra as seções que
+  mudaram: `OK: <M> mudanças cobrem as <N> seções alteradas`, ou `FALTA:` e `SOBRA:`, e sai com 1.
+- `ver <documento> [n]`: a `n`-ésima seção alterada do documento em refino (padrão 1; `--desde-marcada` como no
+  `resumo`), só com as linhas que mudaram, a trocada palavra a palavra (`~~antigo~~ **novo**`), a acrescentada entre `**`
+  e a tirada entre `~~`, e a legenda dos IDs na primeira aparição. Uma linha tirada e uma acrescentada só viram uma
+  trocada quando mais da metade das palavras confere, como no `difflib.Differ`; senão, saem cada uma na sua linha.
+  Seção nova: `Seção nova, <k> linhas.`; removida: `Seção removida.`.
 - `historico`: lista as versões marcadas, por padrão as do `Documento`, da segunda em diante com as linhas
   acrescentadas e tiradas contra a anterior; sem nenhuma, `sem versões marcadas para <documento>`.
 - `diff`: o diff unificado entre duas versões, com `--- versao <n>` e `+++ versao <m>`: sem número, a penúltima contra
@@ -791,9 +895,9 @@ Marca, confere e limpa a versão do documento, ou do pacote, enviada para aprova
 02  <AAAA-MM-DD HH:MM>  sha256:<12 hexadecimais>  +4 -1
 ```
 
-Com `Pacote` no STATUS.md, o `marcar` não aceita caminho e marca o pacote: a cópia de cada documento e o manifesto,
-uma linha `<hash> <caminho>` por documento, na ordem do `Pacote`; o hash gravado é o do manifesto. O `conferir` sem
-caminho dá `OK: pacote <hash> confere (<N> documentos)` ou
+Com `Pacote` ou `Lote` no STATUS.md, o `marcar` não aceita caminho e marca o pacote ou o lote: a cópia de cada
+documento e o manifesto, uma linha `<hash> <caminho>` por documento, na ordem do `Pacote` ou da lista do lote; o hash
+gravado é o do manifesto. O `conferir` sem caminho dá `OK: pacote <hash> confere (<N> documentos)` ou
 `DIVERGE: <k> de <N> documentos mudaram desde a marcação: <lista>`, com uma linha `OK:` ou `DIVERGE:` por documento;
 com um caminho do pacote, confere só ele, e o OK é `OK: <documento> confere (pacote <hash>)`. Sem o manifesto,
 ignora o caminho e compara só o hash do pacote: o OK ganha a linha `manifesto ausente, comparado só o hash`, e a
@@ -801,17 +905,19 @@ divergência é `DIVERGE: pacote mudou desde a marcação (<atual> != <marcado>)
 `manifesto ausente: não dá para dizer qual documento mudou`. Sai com 1 também com
 `<documento> fora do Pacote do STATUS.md` e, quando é preciso marcar de novo, com
 `o manifesto do pacote não é o da marcação <hash>; marque de novo com harness.py passo 6` ou
-`o Pacote do STATUS.md mudou depois da marcação; marque de novo com harness.py passo 6`.
+`o Pacote do STATUS.md mudou depois da marcação; marque de novo com harness.py passo 6`. No lote, a palavra é
+`lote` em todas elas, `<documento> fora do lote` e `a lista do lote mudou depois da marcação; marque de novo com
+harness.py passo 6`.
 
 Pasta das cópias, `.claude/harness/aprovacao/`, fora do git: a cópia (`<caminho com / trocado por __>`), o manifesto
 (`pacote`), o histórico (`historico/<nome da cópia>/NN-<AAAA-MM-DD>T<HHMM>-<12 hexadecimais>.md`) e a `resposta`.
-A `resposta` é a linha `<hash marcado> <AAAA-MM-DDTHH:MM:SS> <trecho>`, que a guarda grava a cada mensagem do usuário
+A lista do lote (`lote`) é de outro comando e o `limpar` a deixa. A `resposta` é a linha `<hash marcado> <AAAA-MM-DDTHH:MM:SS> <trecho>`, que a guarda grava a cada mensagem do usuário
 com `Passo` 6 e versão marcada, com os 80 primeiros caracteres dela. O `passo 7` recusa sem ela ou com o hash de outra
 marcação: ela prova que houve mensagem depois da marcação, não que a mensagem aprova.
 
 Recusas de entrada, com 1: `STATUS.md aponta para <documento>, não para <documento>`, `arquivo não existe: <documento>`
-e o caminho passado com pacote aberto. No `marcar` e no `conferir` sem pacote, o caminho tem de ser o `Documento` do
-STATUS.md, gravado antes com `estado set Documento`; com `Documento: nenhum`, com ou sem o caminho, o `marcar` dá
+e o caminho passado com pacote ou lote aberto. No `marcar` e no `conferir` sem pacote, o caminho tem de ser o
+`Documento` do STATUS.md, gravado antes com `estado set Documento`; com `Documento: nenhum`, com ou sem o caminho, o `marcar` dá
 `Documento: nenhum no STATUS.md; abra o documento com harness.py estado set Documento <caminho>` e o `conferir`,
 `Documento: nenhum no STATUS.md; não há versão a conferir`. No `historico` e no `diff --documento` sem o caminho, a
 recusa é `Documento: nenhum no STATUS.md; passe o caminho do documento`.
@@ -841,6 +947,29 @@ diz se o documento ou o pacote mudou depois da marcação
 desfaz a marcação e apaga a cópia e o histórico
 
 `harness.py versao limpar`
+
+### versao resumo
+
+dá o esqueleto das mudanças contra o HEAD e grava o diff de cada camada
+
+`harness.py versao resumo [--desde-marcada] [--conferir <arquivo>]`
+
+| Argumento ou opção | Obrigatório | O que é |
+|---|---|---|
+| `--desde-marcada` | não | compara com a cópia marcada, não com o HEAD |
+| `--conferir <arquivo>` | não | confere as linhas Onde: do resumo escrito contra as seções que mudaram |
+
+### versao ver
+
+mostra uma seção alterada do documento em refino, palavra a palavra
+
+`harness.py versao ver <documento> [<n>] [--desde-marcada]`
+
+| Argumento ou opção | Obrigatório | O que é |
+|---|---|---|
+| `<documento>` | sim | nome ou caminho do documento em refino |
+| `<n>` | não | número da seção alterada; padrão: 1 |
+| `--desde-marcada` | não | compara com a cópia marcada, não com o HEAD |
 
 ### versao historico
 
@@ -1073,11 +1202,13 @@ item que o lê, com `backlog ilegível: <motivo>`, menos o `a-confirmar`, que sa
 
 gera a legenda das siglas e dos tipos de ID a partir dos documentos
 
-`harness.py legenda [--check]`
+`harness.py legenda [--check | --ids <texto> | --ids-de <arquivo>]`
 
 | Argumento ou opção | Obrigatório | O que é |
 |---|---|---|
 | `--check` | não | só compara com o arquivo e sai com 1 se diferir |
+| `--ids <texto>` | não | imprime o título de cada ID e o significado de cada sigla do texto |
+| `--ids-de <arquivo>` | não | o mesmo que --ids, com o texto lido do arquivo |
 
 Gera a legenda das siglas e dos tipos de ID no caminho de `caminhos.legenda`, a partir da cópia de trabalho, e
 imprime `Gravado: <caminho> (<n> linhas)`. A primeira linha do arquivo é um comentário que diz que ele é gerado; a
@@ -1095,6 +1226,15 @@ O arquivo tem três partes, cada uma com uma tabela:
 
 Com `--check`, só compara o arquivo, byte a byte, com o que gravaria: `legenda em dia: <caminho>`, com 0, ou
 `legenda desatualizada: rode harness.py legenda`, com 1, também para o arquivo ausente.
+
+Com `--ids "<texto>"`, não grava nada e imprime, no lugar da legenda, uma linha `<ID> (<título>)` por ID do texto e
+uma `<SIGLA> (<significado>)` por sigla, na ordem da primeira aparição e sem repetir. O título vem da primeira
+definição do ID nos artefatos da tabela, ou da célula Pendência do backlog; o ID sem definição sai com `não definido`.
+A citação de item de Aceite (`<ID>.<n>`, ou a faixa `<ID>.<n> a <ID>.<m>`) conta como o ID e leva o título depois da
+citação inteira. É para pôr ao lado do ID na primeira aparição de um texto. Não combina com `--check` e não pede `caminhos.legenda`.
+
+Com `--ids-de <arquivo>`, o mesmo, com o texto lido do arquivo, sem passar o Markdown pelo shell; o arquivo ilegível
+sai com `recusado: <arquivo> ilegível (<motivo>)` e 1.
 
 Os dois saem com 1, sem gravar, com `tipo de ID sem legenda: <tipo>`, uma linha por tipo: primeiro cada prefixo de
 `ids.prefixos` sem entrada no núcleo, na ordem do perfil; depois cada `<prefixo>-<CÓDIGO>` citado com número fora de
@@ -1324,7 +1464,8 @@ ele, que a CI usa. Os alterados vêm do git, com 10 s de limite por chamada; o r
   `status-pelo-harness: AVISO: <status> do commit não é o que o harness gravou por último nesta cópia; confira com
   harness.py proximo`.
 - `checar-aprovados`, só com `--indice` e `--base`: falha se um `.md` alterado da pasta do planejamento, `aprovado`
-  no backlog da versão nova, falha no `checar`, com o texto e o molde da versão nova.
+  no backlog da versão nova, falha no `checar`, com o texto e o molde da versão nova. A verificação do `DESDE` do
+  `checar` que só avisa no aprovado anterior à migração dela não conta, com as decisões da versão nova.
 - `legenda-em-dia`, só com `--indice` e `--base` e só com `caminhos.legenda` no perfil: gera a legenda com os
   arquivos da versão nova, sempre, sem olhar o que mudou, e a compara com a legenda da versão nova. Saídas:
   `legenda-em-dia: OK`; `legenda-em-dia: FALHA: rode harness.py legenda`, com a legenda ausente ou diferente; e
@@ -1397,10 +1538,14 @@ Só lê; a rede só para o retorno, e o hook nunca consulta. A ação recomendad
 
 1. consertar: no passo 7 com a versão marcada já no HEAD, `harness.py fechar`; nos passos 6 e 7 com o documento
    mudado desde a marcação, `harness.py versao conferir`; o documento em refino ausente do disco; o documento ou o
-   pacote do STATUS, nos passos 0 a 6, todo `aprovado` na tabela e sem pendência aberta que o cite: `perguntar ao
-   usuário se o STATUS está velho`, com a volta no motivo. Num worktree, a ação ganha `(na árvore principal)`.
-2. o documento ou o pacote em andamento: `/ela-harness:refinar-documento <documento>`, que retoma do passo atual,
-   ou, no passo 7, o commit e o `harness.py fechar`; com "quando o usuário liberar" no `Proximo`, perguntar se o
+   pacote ou o lote do STATUS, nos passos 0 a 6, todo `aprovado` na tabela e sem pendência aberta que o cite:
+   `perguntar ao usuário se o STATUS está velho`, com a volta no motivo; o lote de migração, que mantém os documentos
+   `aprovado`, não entra nesse caso. Com o `Lote` no STATUS e a lista dele ausente, ilegível ou fora da conta,
+   `a lista do lote falta ou não confere`, com a mensagem do `estado` e o jeito de refazer no motivo, que, com a
+   versão marcada, começa por `com a autorização do usuário, harness.py versao limpar`. Num worktree, a ação ganha
+   `(na árvore principal)`.
+2. o documento, o pacote ou o lote em andamento: `/ela-harness:refinar-documento <documento>`, que retoma do passo
+   atual, ou, no passo 7, o commit e o `harness.py fechar`; com "quando o usuário liberar" no `Proximo`, perguntar se o
    usuário libera o commit.
 3. a fila da fase, sem nada aberto: `/ela-harness:gerar-modulos`, quando o gate da fase tem item `ligados`, nenhum
    documento da fase, no disco ou em refino, casa o `por` dele e todo obrigatório da fase existe e está aprovado, com
@@ -1423,7 +1568,10 @@ Só lê; a rede só para o retorno, e o hook nunca consulta. A ação recomendad
    A revisão de um aprovado citado por pendência com `antes do <arquivo>.md` entra logo antes do item desse arquivo,
    se ele está na fila como módulo, rascunho, obrigatório ou documento novo; com mais de um arquivo
    (`antes do a.md e do b.md`), antes do primeiro deles na fila; senão, vai junto das revisões do marcador. Nenhum
-   arquivo depois de um `antes do` conta como citado. Com o gate aprovado,
+   arquivo depois de um `antes do` conta como citado. A pendência cujo destino cita dois ou mais aprovados (fora os
+   em refino) vira um item `lote` só, no lugar das revisões desses documentos e na posição da primeira delas, com a
+   ação do refino do primeiro documento, na ordem do lote, e o motivo `lote <ID>: <N> documentos, camadas <a> a <b>`
+   (`camada <a>` com uma só); o mesmo vale para as revisões sem o marcador. Com o gate aprovado,
    `harness.py estado set Fase <fase seguinte>`, e as pendências com `antes do` aparecem nas revisões sem o marcador;
    com o da última fase, `planejamento concluído: todos os gates aprovados`.
 
@@ -1436,7 +1584,7 @@ recusa ou `<Tipo>: <primeira linha da mensagem>` de outro erro; o gate segue rec
 
 A saída segue o molde "Próximo" do `nucleo/comum/saida.md`; a linha `Atenção` traz o backlog ilegível, os estudos
 com decisão por registrar, os relatos não incorporados, os avisos do ambiente, o retorno e, por último, a passagem.
-Com `--verbose`, a fila inteira, as revisões por documento, também as sem o marcador, e
+Com `--verbose`, a fila inteira, as revisões por documento, também as sem o marcador (o lote, pelo motivo dele), e
 `Retornos com pendência (<n>):`, com uma linha `  #N <título>: <pendências>` por issue, cada pendência resolvida com
 ` (resolvida)`. STATUS.md inválido sai com 1 e `STATUS.md inválido: <motivo>`.
 
@@ -1463,14 +1611,16 @@ fecha o ciclo depois do commit, conferindo a versão no HEAD, e leva o STATUS.md
 |---|---|---|
 | `--proximo <proximo>` | não | o texto do Proximo; sem ele, o próximo passo calculado |
 
-Fecha o ciclo do documento ou do pacote no passo 7, depois do commit, conferindo a versão marcada no HEAD.
+Fecha o ciclo do documento, do pacote ou do lote no passo 7, depois do commit, conferindo a versão marcada no HEAD.
 
 Confere que cada documento em refino está no HEAD igual ao disco, pelo `git show` e pelo `git cat-file --filters`,
-que aplica o `core.autocrlf`, e que o hash dele, ou o do manifesto refeito no pacote, é o `Versao-aprovacao`; vale
-noutra máquina, sem as cópias. Então grava numa escrita só `Versao-aprovacao: —`, `Documento: nenhum`, sem `Pacote`,
-`Passo: 0`, `Rodada: 0` e o `Proximo` (o `--proximo`, ou a ação do `harness.py proximo`), apaga as cópias da
-aprovação e imprime `Fechado: <documento> (<hash> no HEAD <commit>)` e `Proximo = <texto>`, com 0. Num pacote, o
-documento vira `pacote de <N> documentos`. Não pede autorização: com a versão no HEAD, nada se perde.
+que aplica o `core.autocrlf`, e que o hash dele, ou o do manifesto refeito no pacote ou no lote, é o
+`Versao-aprovacao`; vale noutra máquina, sem as cópias. Então grava numa escrita só `Versao-aprovacao: —`,
+`Documento: nenhum`, sem `Pacote` e sem `Lote`, `Passo: 0`, `Rodada: 0` e o `Proximo` (o `--proximo`, ou a ação do
+`harness.py proximo`), apaga as cópias da aprovação, a lista do lote e a saída gravada do `afetados` e imprime
+`Fechado: <documento> (<hash> no HEAD <commit>)` e `Proximo = <texto>`, com 0. Num pacote, o documento vira
+`pacote de <N> documentos`; num lote, `lote <origem> de <N> documentos`. Não pede autorização: com a versão no HEAD,
+nada se perde.
 
 Depois, faz o `git add` do `STATUS.md` e o commit dele. Quando o HEAD mudou um documento do ciclo e nenhuma outra
 branch, local ou remota (pela referência do último fetch), contém o HEAD, sai o `git commit --amend --no-edit`; nos
@@ -1602,8 +1752,8 @@ comando, as outras regras de cada alvo, o código de `-c` e as perguntas; a prim
   aprovada ou de um gerado do `gerar` passa também fora de lane; as outras passam antes pelo `fora_da_lane`. As
   outras regras valem para ela, menos no `LANES.md`, que segue recusado, e o caminho que o mesmo comando também grava
   de outro jeito não conta como restauração;
-- pede confirmação: sessão no checkout principal e alvo em `.claude/`; `git commit --no-verify` ou `-n`; no perfil de
-  desenvolvimento, `git push --no-verify`, ou um começo dele, e a restauração ampla, que volta o disco (o
+- pede confirmação: sessão no checkout principal e alvo em `.claude/`; `git commit --no-verify` ou `-n`; no perfil
+  de desenvolvimento, `git push --no-verify`, ou um começo dele, e a restauração ampla, que volta o disco (o
   `git restore` sem `--staged` ou com `--worktree`, e o `git checkout --`) e tem por alvo a raiz ou uma pasta que
   contém a cópia, um `estado.md`, um `aceitacao.md`, um `revisao.md`, um `gabarito.md` ou um gerado do `gerar`, com
   `a restauração de <alvo> apaga as mudanças sem commit de toda a pasta, não só as dos arquivos do harness`; o
@@ -3081,12 +3231,15 @@ refaz o espelho das fichas no Linear, sem duplicar nada
 | `nucleo/planejamento/gate.py` | Gate de fase (spec 2a, §6.1): pré-condição e itens de script e de leitor frio do checklist, com as verificações do núcleo. |
 | `nucleo/planejamento/gerado_planejamento.py` | Texto gerado do harness de planejamento (spec do porte 1, §9.1): as partes do `CLAUDE.md` que são do harness, com os valores do perfil. |
 | `nucleo/planejamento/legenda.py` | Legenda das siglas e dos tipos de ID (spec 6b, §5), gerada a partir dos documentos e conferida no commit. |
+| `nucleo/planejamento/lote.py` | O lote de revisão: a ordem dos documentos e o `estado lote`, que o abre só com o que o destino da pendência cita. |
+| `nucleo/planejamento/migrar.py` | As migrações do projeto entre versões do harness: a leitura delas, as correções de forma e o comando `migrar`. |
 | `nucleo/planejamento/passagem.py` | Passagem do planejamento ao código (spec 6b, §6 a §10): exportação, áreas do código, `areas-cobertas`, leitor frio e publicação. |
 | `nucleo/planejamento/passo.py` | Fechar um passo do ciclo (spec da fase 3a, §8): grava o STATUS.md e, nos passos 5 e 7, o status do artefato. |
 | `nucleo/planejamento/perfil.py` | Perfil do projeto (spec da fase 2a, §5): tudo o que é do projeto, lido de .claude/perfil.toml e validado. |
 | `nucleo/planejamento/proximo.py` | O próximo passo do planejamento (spec 4a, §6), calculado pelo STATUS, pelos artefatos, pelas pendências, pelos links e pelo ambiente. |
 | `nucleo/planejamento/rastreio.py` | Rastreio entre os documentos do planejamento (spec 4b, §5 e §11): quem cita cada documento, termo ou ID, e com que status. |
 | `nucleo/planejamento/registro.py` | Registro no ato (spec 4b, §10, e 4a, §9): Ruling, pendência e relato acrescentados no formato de cada arquivo, sem tirar linha. |
+| `nucleo/planejamento/resumo.py` | O resumo das mudanças dos documentos em refino: o esqueleto contra o HEAD ou a cópia marcada e o diff por camada. |
 | `nucleo/planejamento/sessao.py` | Início da sessão (spec 4a, §8.1 e §18): o JSON do hook SessionStart, com o aviso ao usuário e o contexto do modelo. |
 | `nucleo/planejamento/versao.py` | Hash da versão enviada para aprovação (passo 6 do ciclo): marcar, conferir e limpar. |
 | `nucleo/comum/saida.md` | os moldes do que o usuário lê no chat; o passo que produz cada saída lê este arquivo na hora de escrever |

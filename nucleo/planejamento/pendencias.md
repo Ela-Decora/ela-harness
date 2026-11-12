@@ -1,13 +1,13 @@
 # Pendências: resolver, anotar, perguntar ou abrir
 
-Lido pela skill quando o ciclo encontra trabalho ou decisão que o texto do documento não resolve. O **escopo do ciclo** são os documentos que o ciclo aberto pode mudar: o documento ou o pacote em refino. A **pendência do ciclo** é a pendência aberta que trouxe o documento ao ciclo, como a do escopo no modo revisão; a primeira aprovação pode não ter. A **nota** é o texto que se acrescenta ao status de uma pendência aberta.
+Lido pela skill quando o ciclo encontra trabalho ou decisão que o texto do documento não resolve. O **escopo do ciclo** são os documentos que o ciclo aberto pode mudar: o documento, o pacote ou o lote em refino. A **pendência do ciclo** é a pendência aberta que trouxe o documento ao ciclo, como a do escopo no modo revisão; a primeira aprovação pode não ter. A **nota** é o texto que se acrescenta ao status de uma pendência aberta.
 
 ## A escada
 
 Vale o primeiro degrau que couber:
 
 1. Dentro do escopo: resolva agora. Se pede decisão do usuário, pergunte agora, pela ferramenta de opções.
-2. Fora do escopo: nota na pendência do ciclo. Sem ela, nota numa pendência aberta com destino no documento atingido (`grep` do caminho no arquivo de pendências) e com o marcador que a pendência nova teria, o do gate ou `antes do`; a primeira que achar.
+2. Fora do escopo: nota na pendência do ciclo. Sem ela, nota numa pendência aberta com destino no documento atingido (`grep` do caminho no arquivo de pendências) e com o marcador que a pendência nova teria, o do gate ou `antes do`; a primeira que achar. O assunto dela pode ser outro: a pendência é a fila do documento, e a nota entra no escopo do ciclo que a revisar.
 3. Sem pendência para a nota: a pergunta.
 
 ## A pergunta
@@ -26,11 +26,11 @@ Fica na árvore do chat ("Fica para a próxima") até a redação. No passo 3, a
 
 ## A nota
 
-`harness.py registrar nota <prefixo>-NN "<texto>"`. Quando sobra trabalho noutro documento, o texto começa por `resta em <nome do arquivo>: <o quê>`; fora disso, é livre.
+`harness.py registrar nota <prefixo>-NN "<texto>"`. Quando sobra trabalho noutro documento, o texto começa por `resta em <nome do arquivo>: <o quê>`; fora disso, é livre. O arquivo é um documento que existe; o trabalho de um documento que ainda não existe resta no que vai criá-lo, como o módulo que gera a tela, com o nome do que falta no `<o quê>`. O mesmo vale para o destino da pendência. Com mais de uma pendência no escopo, a nota vai para a pendência cuja mudança atingiu o documento; quando nenhuma o atingiu, como no Ruling triado, para a de menor número. Com um lote aberto, o documento do lote não recebe nota `resta em`: o que resta dele se resolve no ciclo.
 
 ## O passo 7
 
-A pendência do ciclo sem nota `resta em` desta volta fecha por `harness.py backlog resolver`. Com ela, fica aberta, e, quando o que resta está fora do destino, `harness.py backlog destino <prefixo>-NN "<destino>"` troca o destino pelos documentos que restam, com os marcadores do antigo. O relato do passo 7 diz o que resta e onde.
+A pendência do ciclo sem nota `resta em` desta volta fecha por `harness.py backlog resolver`, depois de resolvidas também as notas de outros ciclos que ela traz para o documento. Com ela, fica aberta, e, quando o que resta está fora do destino, `harness.py backlog destino <prefixo>-NN "<destino>"` troca o destino pelos documentos que restam, com os marcadores do antigo; o destino novo não cita documento do lote aberto. O relato do passo 7 diz o que resta e onde.
 
 ## As causas
 

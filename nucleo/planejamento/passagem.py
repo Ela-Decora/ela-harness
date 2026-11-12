@@ -1048,7 +1048,10 @@ def _conferir(raiz: Path, perfil: Perfil, executar) -> tuple[dict[str, str], str
     except backlog.BacklogIlegivel as erro:
         raise ErroPassagem(f"backlog ilegível: {erro.mensagem}") from None
     if dados["Documento"] != "nenhum":
-        documentos = dados.get("Pacote", "").split() or [dados["Documento"]]
+        try:
+            documentos = estado.documentos(dados, raiz)
+        except estado.EstadoInvalido as erro:
+            raise ErroPassagem(f"STATUS.md inválido: {erro.mensagem}") from None
         raise PublicacaoRecusada((f"{comum.juntar(documentos)} em edição (passo {dados['Passo']})",))
     pasta = perfil.caminhos.planejamento.rstrip("/")
     linhas = []

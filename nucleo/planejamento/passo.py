@@ -13,6 +13,8 @@ from pathlib import Path
 import backlog
 import comum
 import estado
+import migrar
+import registro
 import versao
 from perfil import Perfil
 
@@ -29,19 +31,26 @@ Efeito além do STATUS.md, nos documentos em refino (o `Pacote`, ou o `Documento
 - passo 7: status `aprovado`, com a data de hoje, só se o `versao conferir` der OK e houver mensagem do usuário
   depois da última marcação (a `resposta` que a guarda grava).
 
+No lote de migração (`Lote: migração v<de>→v<para>`, aberto pelo `migrar`), os passos 5 e 7 não mexem na tabela de
+artefatos: os documentos seguem `aprovado`, com a data de antes. O passo 7 grava, no lugar, a linha
+`- <data> migração v<de>→v<para>: <N> documentos` na seção de aprovações do arquivo de decisões (o `registrar
+aprovacao`), depois das conferências e antes do STATUS.md.
+
 Só o documento numa pasta de fase entra na tabela de artefatos; sem linha, ganha uma no fim dela. Tudo é conferido
 antes de gravar; o backlog é gravado antes do STATUS.md e volta ao texto anterior se o STATUS.md não gravar. No
 passo 6, a marcação fica se a gravação dos campos falhar depois, e repetir o comando é seguro.
 
 Saída, com 0: `Passo = <n>; Rodada = <r>; Proximo = <texto>`, com `Versao-aprovacao = <hash>; ` antes no passo 6;
-uma linha `backlog: <documento> = <status> em <AAAA-MM-DD>` por documento gravado; e, no passo 7, a mensagem do
-usuário que valeu como aprovação, `prova: mensagem das <hora>: «<trecho>»`.
+uma linha `backlog: <documento> = <status> em <AAAA-MM-DD>` por documento gravado; no passo 7, a mensagem do
+usuário que valeu como aprovação, `prova: mensagem das <hora>: «<trecho>»`; e, no lote de migração,
+`decisões: migração v<de>→v<para> registrada em <arquivo de decisões>:<linha>`.
 
 Recusas, com 1 e nada gravado, depois de `recusado: `: `com Documento nenhum, só o passo 0 é aceito`;
 `a versão em aprovação não confere; nada foi gravado`, seguida da saída do `versao conferir`;
 `nenhuma mensagem do usuário depois da última marcação (<hash>); apresente a versão e espere a resposta`;
 `STATUS.md inválido: <motivo>`, `backlog ilegível: <motivo>`, `backlog sem a tabela de artefatos (...)`, as do
-`estado set` e, no passo 6, as do `versao marcar`, como `arquivo não existe: <documento>`.
+`estado set` e, no passo 6, as do `versao marcar`, como `arquivo não existe: <documento>`; no passo 7 do lote de
+migração, as do `registrar aprovacao`, como a falta da seção de aprovações.
 """
 
 _STATUS_DO_PASSO = {5: "em-revisao", 7: "aprovado"}
@@ -66,13 +75,14 @@ class Gravado:
     artefato: tuple[str, str, str] | None
     artefatos: tuple[tuple[str, str, str], ...] = ()
     prova: str = ""
+    decisao: str = ""
 
 
 def _backlog_novo(
     raiz: Path, perfil: Perfil, documentos: list[str], numero: int, hoje: str
 ) -> tuple[str, str, tuple[str, ...]] | None:
     """(texto antigo, texto novo, documentos gravados) do backlog nos passos 5 e 7, com os documentos que estão numa
-    pasta de fase; None em outro passo ou sem documento numa pasta de fase."""
+    pasta de fase; None em outro passo, no lote de migração ou sem documento numa pasta de fase."""
     nas_fases = [(documento, perfil.fase_do_documento(documento)) for documento in documentos]
     nas_fases = [(documento, fase) for documento, fase in nas_fases if fase is not None]
     if numero not in _STATUS_DO_PASSO or not nas_fases:
@@ -117,7 +127,12 @@ def fechar(
         estado.preparar(status, mudancas, perfil, hoje)
     except estado.EstadoInvalido as erro:
         raise PassoRecusado(erro.mensagem) from None
-    textos = _backlog_novo(raiz, perfil, estado.documentos(dados), numero, hoje)
+    try:
+        em_refino = estado.documentos(dados, raiz)
+    except estado.EstadoInvalido as erro:
+        raise PassoRecusado(f"STATUS.md inválido: {erro.mensagem}") from None
+    de_migracao = migrar.migracao_da_origem(estado.origem_do_lote(dados.get(estado.CAMPO_LOTE, "")))
+    textos = None if de_migracao else _backlog_novo(raiz, perfil, em_refino, numero, hoje)
     if numero == 7:
         confere, mensagem = versao.conferir(raiz, None, perfil)
         if not confere:
@@ -129,6 +144,15 @@ def fechar(
                 "apresente a versão e espere a resposta"
             )
 
+    decisao = ""
+    # O `passo 7` repetido, na retomada, não grava de novo a linha da migração.
+    if numero == 7 and de_migracao and dados["Passo"] != "7":
+        texto = f"{migrar.ORIGEM.format(de=de_migracao[0], para=de_migracao[1])}: " \
+                f"{len(em_refino)} documento{'' if len(em_refino) == 1 else 's'}"
+        try:
+            decisao = f"{perfil.caminhos.decisoes}:{registro.aprovacao(raiz, perfil, texto, hoje)}"
+        except registro.RegistroRecusado as erro:
+            raise PassoRecusado(erro.mensagem, tuple(erro.detalhes)) from None
     campos: dict[str, str] = {}
     if numero == 6:
         try:
@@ -146,7 +170,7 @@ def fechar(
             comum.escrever_texto(caminho_backlog, textos[0])
         raise PassoRecusado(erro.mensagem) from None
     artefatos = tuple((gravado, _STATUS_DO_PASSO[numero], hoje) for gravado in textos[2]) if textos is not None else ()
-    return Gravado(campos, artefatos[0] if artefatos else None, artefatos, _prova(raiz) if numero == 7 else "")
+    return Gravado(campos, artefatos[0] if artefatos else None, artefatos, _prova(raiz) if numero == 7 else "", decisao)
 
 
 def _prova(raiz: Path) -> str:

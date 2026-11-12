@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import re
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable
 
@@ -144,6 +144,12 @@ extras, depois das seis e das regras do perfil; o pre-commit não as roda:
   ou com arquivo listado que não existe. Com o formato inválido, `der-rastreio` e `der-em-dia` falham com
   `formato do DER inválido; corrija o der-formato antes`.
 
+Uma verificação que entrou numa versão do plugin depois da aprovação só avisa no documento `aprovado` na tabela de
+artefatos: a linha é `<nome>: AVISO: <n> ocorrências, verificação da v<x>, posterior à aprovação`, sem sair com 1.
+Vale quando nenhuma migração registrada no arquivo de decisões chegou à `v<x>`, ou quando a data da aprovação na
+tabela é anterior à da migração que chegou. Fora disso, e em documento que não está `aprovado`, falha como as outras.
+Nesta versão, nenhuma verificação entra nessa regra. O `checar-aprovados` do pre-commit a segue.
+
 Recusas do documento, numa linha: `documento fora de <pasta>/: <documento>`, `documento não encontrado: <caminho>`,
 `molde não encontrado: <caminho>` e as de arquivo fora de UTF-8 ou ilegível.
 """
@@ -226,6 +232,7 @@ class Resultado:
     ocorrencias: int
     primeira_linha: int | None
     detalhes: list[str]
+    aviso: str = ""
 
 
 class EntradaInvalida(Exception):
@@ -706,6 +713,54 @@ def _ler(raiz: Path, caminho: Path, rotulo: str) -> str:
         raise EntradaInvalida(f"{rotulo} ilegível: {mostrar(raiz, caminho)} ({motivo})") from None
 
 
+# O nome da verificação nova e a versão do plugin em que ela entrou. Nesta versão, nenhuma entra; as de antes ficam
+# fora e falham como sempre.
+DESDE: dict[str, str] = {}
+
+
+def rebaixar_desde(resultados: list[Resultado], status: str | None, data: str | None,
+                   migracoes: list) -> list[Resultado]:
+    """Os resultados com a falha das verificações do `DESDE` rebaixada a aviso, no documento `aprovado`.
+
+    Só o resultado que falha, cujo nome está no `DESDE`, e só com `status` que começa por `aprovado`, como no
+    `migrar` e nas citações. A migração que chegou à versão
+    `x` do `DESDE` é a primeira, na ordem de `migracoes`, cujo `para` é `x` ou mais novo. Sem ela, rebaixa; com ela,
+    só se a `data` da aprovação é anterior à da migração. O rebaixado fica `ok`, com `aviso` na versão do `DESDE`.
+    """
+    import migrar  # dentro da função: o `migrar` importa o `citacoes`, que importa o `checar`
+
+    if not (status or "").startswith("aprovado"):
+        return resultados
+    rebaixados = []
+    for resultado in resultados:
+        desde = DESDE.get(resultado.nome)
+        if resultado.ok or desde is None:
+            rebaixados.append(resultado)
+            continue
+        chegou = next((m for m in migracoes
+                       if migrar.numero_da_versao(m.para) >= migrar.numero_da_versao(desde)), None)
+        if chegou is None or (data or "") < chegou.data:
+            resultado = replace(resultado, ok=True, aviso=desde)
+        rebaixados.append(resultado)
+    return rebaixados
+
+
+def rebaixar_do_documento(resultados: list[Resultado], relativo: str, texto_backlog: str | None, perfil: Perfil,
+                          ler_decisoes: Callable[[], str | None]) -> list[Resultado]:
+    """O `rebaixar_desde` de um documento da tabela de artefatos de `texto_backlog`: o status e a data vêm da linha
+    dele, e as migrações, de `ler_decisoes()`, que só roda se o `DESDE` cobre algum resultado que falha. Texto de
+    decisões ilegível ou ausente (`None`) vale como sem migração."""
+    if texto_backlog is None or not any(not r.ok and r.nome in DESDE for r in resultados):
+        return resultados
+    pasta = perfil.caminhos.planejamento
+    status = next((s for _, caminho, s in backlog.artefatos_da_pasta(texto_backlog, pasta) if caminho == relativo), None)
+    data = backlog.datas_da_pasta(texto_backlog, pasta).get(relativo)
+    import migrar
+
+    texto = ler_decisoes()
+    return rebaixar_desde(resultados, status, data, [] if texto is None else migrar.migracoes(texto))
+
+
 def checar_arquivo(raiz: Path, documento: Path, perfil: Perfil, executar=subprocess.run) -> list[Resultado]:
     """O que o subcomando `checar` faz: acha o molde do documento, lê os dois e confere.
 
@@ -727,7 +782,15 @@ def checar_arquivo(raiz: Path, documento: Path, perfil: Perfil, executar=subproc
         except backlog.BacklogIlegivel as erro:
             erro_backlog = erro.mensagem
     resultados = checar_versao(raiz, relativo, texto_documento, texto_molde, texto_backlog, perfil, erro_backlog)
-    return resultados + _da_camada(raiz, relativo, texto_documento, texto_molde, texto_backlog, perfil, executar)
+    resultados += _da_camada(raiz, relativo, texto_documento, texto_molde, texto_backlog, perfil, executar)
+
+    def decisoes() -> str | None:
+        try:
+            return comum.ler_texto(raiz / perfil.caminhos.decisoes)
+        except (OSError, UnicodeDecodeError):
+            return None
+
+    return rebaixar_do_documento(resultados, relativo, texto_backlog, perfil, decisoes)
 
 
 _RE_ITEM_VAZIO = re.compile(r"\s*(?:[-*+]|\d+[.)])\s*")
@@ -954,6 +1017,10 @@ def _resumo(resultado: Resultado) -> str:
     if resultado.nome == A_CONFIRMAR:
         return f"{resultado.nome}: {resultado.ocorrencias}"
     aviso = resultado.nome == ACEITE_RENUMERADO and resultado.ocorrencias > 0
+    if resultado.aviso:
+        plural = "ocorrência" if resultado.ocorrencias == 1 else "ocorrências"
+        return (f"{resultado.nome}: AVISO: {resultado.ocorrencias} {plural}, "
+                f"verificação da v{resultado.aviso}, posterior à aprovação")
     if resultado.ok and not aviso:
         return f"{resultado.nome}: OK"
     plural = "ocorrência" if resultado.ocorrencias == 1 else "ocorrências"

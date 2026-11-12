@@ -129,8 +129,8 @@ comando, as outras regras de cada alvo, o código de `-c` e as perguntas; a prim
   aprovada ou de um gerado do `gerar` passa também fora de lane; as outras passam antes pelo `fora_da_lane`. As
   outras regras valem para ela, menos no `LANES.md`, que segue recusado, e o caminho que o mesmo comando também grava
   de outro jeito não conta como restauração;
-- pede confirmação: sessão no checkout principal e alvo em `.claude/`; `git commit --no-verify` ou `-n`; no perfil de
-  desenvolvimento, `git push --no-verify`, ou um começo dele, e a restauração ampla, que volta o disco (o
+- pede confirmação: sessão no checkout principal e alvo em `.claude/`; `git commit --no-verify` ou `-n`; no perfil
+  de desenvolvimento, `git push --no-verify`, ou um começo dele, e a restauração ampla, que volta o disco (o
   `git restore` sem `--staged` ou com `--worktree`, e o `git checkout --`) e tem por alvo a raiz ou uma pasta que
   contém a cópia, um `estado.md`, um `aceitacao.md`, um `revisao.md`, um `gabarito.md` ou um gerado do `gerar`, com
   `a restauração de <alvo> apaga as mudanças sem commit de toda a pasta, não só as dos arquivos do harness`; o
@@ -410,7 +410,10 @@ def _sessao(raiz: Path, perfil: Perfil | PerfilDesenvolvimento | PerfilComum) ->
         except estado.EstadoInvalido:
             pass
     if dados.get("Passo") in _PASSOS_EM_APROVACAO:
-        documentos = tuple(posixpath.normpath(documento) for documento in estado.documentos(dados))
+        try:
+            documentos = tuple(posixpath.normpath(documento) for documento in estado.documentos(dados, raiz))
+        except estado.EstadoInvalido:
+            documentos = ()  # a lista do lote falta ou não confere: nenhum documento em aprovação
         passo = dados["Passo"] if documentos else None
     arvore = raiz_da_arvore(raiz) or raiz
     na_lane = isinstance(perfil, PerfilDesenvolvimento) and _na_lane(arvore, perfil)

@@ -5,7 +5,7 @@ tools: Read, Grep, Glob
 model: sonnet
 ---
 
-Tudo chega no prompt de despacho: os caminhos do documento, do molde e do trecho do rascunho, o arquivo de princípios do tipo do documento, a camada e a regra dela, os sistemas do cliente, a rodada, o arquivo de decisões e a lista de cheiros de ambiguidade; no modo revisão e na rodada 2, também o `Escopo:`. Num pacote, a linha `Documento:` dá lugar à lista `Documentos:`, cada um com o seu molde e o seu arquivo de princípios, e vem a linha `Módulo de origem:`. As decisões já tomadas pelo usuário ficam na seção "Decisões" do arquivo de decisões: não as conteste; aponte só contradição com elas.
+Tudo chega no prompt de despacho: os caminhos do documento, do molde e do trecho do rascunho, o arquivo de princípios do tipo do documento, a camada e a regra dela, os sistemas do cliente, a rodada, o arquivo de decisões e a lista de cheiros de ambiguidade; no modo revisão e na rodada 2, também o `Escopo:`; no modo revisão e no lote, o `Diff:`, o `Afetados:` e o `Critério:`. Num pacote, a linha `Documento:` dá lugar à lista `Documentos:`, cada um com o seu molde e o seu arquivo de princípios, e vem a linha `Módulo de origem:`. As decisões já tomadas pelo usuário ficam na seção "Decisões" do arquivo de decisões: não as conteste; aponte só contradição com elas.
 
 ## Regras
 
@@ -45,7 +45,13 @@ Deixei de fora, de propósito: <o que considerou e descartou, em uma linha cada>
 
 BLOQUEIA: a próxima camada não consegue usar o trecho como está. ATENÇÃO: usável, mas vai gerar retrabalho ou dupla interpretação. SUGESTÃO: consultiva, não impede a aprovação.
 
-Num pacote, o veredito vem uma vez, para o pacote; os achados de cada documento ficam sob um título `### <documento>`, os achados entre documentos (item 9) sob `### Pacote`, e as linhas "Não verificável" e "Deixei de fora" vêm uma vez, no fim. Até 400 palavras, mais 150 por documento além do primeiro, no máximo 1.000.
+Num pacote, o veredito vem uma vez, para o pacote; os achados de cada documento ficam sob um título `### <documento>`, os achados entre documentos (item 9) sob `### Pacote`, e as linhas "Não verificável" e "Deixei de fora" vêm uma vez, no fim. Num lote (a lista `Documentos:` com o `Diff:`), é o mesmo, com `### Lote` no lugar de `### Pacote`, e o veredito vale para a camada; não chame o lote de pacote. Até 400 palavras, mais 150 por documento além do primeiro, no máximo 1.000.
+
+## Diff e critério
+
+- Com `Diff:` no despacho, revise só os trechos do diff, e do documento leia só a seção de cada trecho: o resto do documento não entra, e a regra de ler o documento inteiro, acima, não vale. `Afetados:` é a saída do `harness.py afetados`, com as linhas dos outros documentos que citam o que mudou; use-a para achar contradição entre o trecho e o que o cita, sem ler os outros documentos inteiros. Com `Documentos:`, o diff é o da camada e vale para cada documento dela. O `Escopo:` que vem com o `Diff:` é o texto da pendência; os trechos são os do diff.
+- Com `Critério: conteúdo`, ou sem a linha, valem as verificações de "O que verificar", só nos trechos do diff.
+- Com `Critério: forma` (o lote de migração, `Escopo: migração v<de>→v<para>`), confira que o texto ficou legível, fiel ao molde, sem perda de conteúdo e sem citação quebrada. O achado de forma que um script não resolve vai para "Para você" no relato, e o veredito diz isso na linha do achado.
 
 ## Escopo
 

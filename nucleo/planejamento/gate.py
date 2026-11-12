@@ -702,8 +702,11 @@ def _versao_limpa(ctx: _Contexto) -> tuple[str, str, list[str]]:
     marcada = ctx.status["Versao-aprovacao"]
     if marcada == _SEM_VERSAO:
         return PASS, "", []
+    if estado.CAMPO_LOTE in ctx.status:
+        origem = estado.origem_do_lote(ctx.status[estado.CAMPO_LOTE])
+        return FAIL, f"Versao-aprovacao {marcada} marcada para o lote {origem}", []
     if estado.CAMPO_PACOTE in ctx.status:
-        pacote = comum.juntar(estado.documentos(ctx.status))
+        pacote = comum.juntar(estado.documentos(ctx.status, ctx.raiz))
         return FAIL, f"Versao-aprovacao {marcada} marcada para o pacote {pacote}", []
     return FAIL, f"Versao-aprovacao {marcada} marcada para {ctx.status['Documento']}", []
 

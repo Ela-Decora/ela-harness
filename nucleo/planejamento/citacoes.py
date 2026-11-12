@@ -87,11 +87,16 @@ def secoes_com_itens(texto: str) -> dict[str, tuple[int, list[tuple[int, str]]]]
     return secoes
 
 
+def padrao_de_citacoes(ids: list[str]) -> re.Pattern[str]:
+    """A citação `<ID>.<n>` de um dos `ids`, ou a faixa `<ID>.<n> a <ID>.<m>`: os grupos são o ID, o `n` e o `m`."""
+    return re.compile(r"(?<![\w-])(" + "|".join(re.escape(id_) for id_ in sorted(ids, key=len, reverse=True))
+                      + r")\.([0-9]+)(?:\s+a\s+\1\.([0-9]+))?(?![0-9])")
+
+
 def _citacoes_de_aceite(raiz: Path, relativo: str, ids: list[str], texto_backlog: str | None,
                         perfil: Perfil) -> dict[str, list[tuple[int, int, str]]]:
     """Por ID, as citações `(de, ate, documento)` dos documentos aprovados das pastas de fase, menos o próprio."""
-    padrao = re.compile(r"(?<![\w-])(" + "|".join(re.escape(id_) for id_ in sorted(ids, key=len, reverse=True))
-                        + r")\.([0-9]+)(?:\s+a\s+\1\.([0-9]+))?(?![0-9])")
+    padrao = padrao_de_citacoes(ids)
     achadas: dict[str, list[tuple[int, int, str]]] = {}
     for _, caminho, status in backlog.artefatos_da_pasta(texto_backlog or "", perfil.caminhos.planejamento):
         if not status.startswith("aprovado") or caminho == relativo or perfil.fase_do_documento(caminho) is None:

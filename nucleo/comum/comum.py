@@ -19,6 +19,10 @@ from typing import Callable
 import caminho
 
 PASTA_APROVACAO = ".claude/harness/aprovacao"
+# O resumo das mudanças que o modelo escreve fica fora de `.claude/`, que o Claude Code trata como pasta sensível e onde
+# toda escrita pede permissão; a pasta traz o próprio `.gitignore`, que a esconde do git sem mexer no do projeto.
+PASTA_RESUMO = ".harness-aprovacao"
+ARQUIVO_RESUMO = f"{PASTA_RESUMO}/resumo.md"
 CAMINHO_PERFIL = ".claude/perfil.toml"
 # O link que o lançador do projeto segue até o núcleo do plugin.
 LINK_DO_NUCLEO = ".claude/harness/nucleo"

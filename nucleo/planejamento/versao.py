@@ -34,7 +34,20 @@ Marca, confere e limpa a versão do documento, ou do pacote, enviada para aprova
   `cópia restaurada do commit <commit>`, ou, sem achá-la, dá a linha
   `versão marcada ausente da cópia e dos últimos 50 commits do arquivo`; com o mesmo hash, ou sem o git, avisa
   `cópia ausente, comparado só o hash`.
-- `limpar`: volta o campo para `—` e apaga as cópias, o manifesto, a `resposta` e o histórico.
+- `limpar`: volta o campo para `—` e apaga as cópias, o manifesto, a `resposta` e o histórico; a lista do lote fica.
+- `resumo`: o esqueleto das mudanças dos documentos em refino contra o HEAD, por documento e seção (`alterada (+a −r)`,
+  `nova`, `removida`) e os IDs que entraram, saíram ou mudaram; o documento fora do HEAD é `novo`. Grava o diff de cada
+  camada com mudança em `.claude/harness/dossie/diff-camada-<N>.diff` e cria a pasta `.harness-aprovacao/`, com um
+  `.gitignore` de `*`, para o resumo escrito em `.harness-aprovacao/resumo.md`, fora do `.claude/`, onde o Claude Code
+  pede permissão a cada escrita. `--desde-marcada` compara com a cópia marcada e,
+  sem ela, recusa. Sem mudança: `nenhuma mudança contra o HEAD`, ou `contra a versão marcada`. Com
+  `--conferir <arquivo>`, confere as linhas `Onde: <documento> · <seção>` do resumo escrito contra as seções que
+  mudaram: `OK: <M> mudanças cobrem as <N> seções alteradas`, ou `FALTA:` e `SOBRA:`, e sai com 1.
+- `ver <documento> [n]`: a `n`-ésima seção alterada do documento em refino (padrão 1; `--desde-marcada` como no
+  `resumo`), só com as linhas que mudaram, a trocada palavra a palavra (`~~antigo~~ **novo**`), a acrescentada entre `**`
+  e a tirada entre `~~`, e a legenda dos IDs na primeira aparição. Uma linha tirada e uma acrescentada só viram uma
+  trocada quando mais da metade das palavras confere, como no `difflib.Differ`; senão, saem cada uma na sua linha.
+  Seção nova: `Seção nova, <k> linhas.`; removida: `Seção removida.`.
 - `historico`: lista as versões marcadas, por padrão as do `Documento`, da segunda em diante com as linhas
   acrescentadas e tiradas contra a anterior; sem nenhuma, `sem versões marcadas para <documento>`.
 - `diff`: o diff unificado entre duas versões, com `--- versao <n>` e `+++ versao <m>`: sem número, a penúltima contra
@@ -46,9 +59,9 @@ Marca, confere e limpa a versão do documento, ou do pacote, enviada para aprova
 02  <AAAA-MM-DD HH:MM>  sha256:<12 hexadecimais>  +4 -1
 ```
 
-Com `Pacote` no STATUS.md, o `marcar` não aceita caminho e marca o pacote: a cópia de cada documento e o manifesto,
-uma linha `<hash> <caminho>` por documento, na ordem do `Pacote`; o hash gravado é o do manifesto. O `conferir` sem
-caminho dá `OK: pacote <hash> confere (<N> documentos)` ou
+Com `Pacote` ou `Lote` no STATUS.md, o `marcar` não aceita caminho e marca o pacote ou o lote: a cópia de cada
+documento e o manifesto, uma linha `<hash> <caminho>` por documento, na ordem do `Pacote` ou da lista do lote; o hash
+gravado é o do manifesto. O `conferir` sem caminho dá `OK: pacote <hash> confere (<N> documentos)` ou
 `DIVERGE: <k> de <N> documentos mudaram desde a marcação: <lista>`, com uma linha `OK:` ou `DIVERGE:` por documento;
 com um caminho do pacote, confere só ele, e o OK é `OK: <documento> confere (pacote <hash>)`. Sem o manifesto,
 ignora o caminho e compara só o hash do pacote: o OK ganha a linha `manifesto ausente, comparado só o hash`, e a
@@ -56,17 +69,19 @@ divergência é `DIVERGE: pacote mudou desde a marcação (<atual> != <marcado>)
 `manifesto ausente: não dá para dizer qual documento mudou`. Sai com 1 também com
 `<documento> fora do Pacote do STATUS.md` e, quando é preciso marcar de novo, com
 `o manifesto do pacote não é o da marcação <hash>; marque de novo com harness.py passo 6` ou
-`o Pacote do STATUS.md mudou depois da marcação; marque de novo com harness.py passo 6`.
+`o Pacote do STATUS.md mudou depois da marcação; marque de novo com harness.py passo 6`. No lote, a palavra é
+`lote` em todas elas, `<documento> fora do lote` e `a lista do lote mudou depois da marcação; marque de novo com
+harness.py passo 6`.
 
 Pasta das cópias, `.claude/harness/aprovacao/`, fora do git: a cópia (`<caminho com / trocado por __>`), o manifesto
 (`pacote`), o histórico (`historico/<nome da cópia>/NN-<AAAA-MM-DD>T<HHMM>-<12 hexadecimais>.md`) e a `resposta`.
-A `resposta` é a linha `<hash marcado> <AAAA-MM-DDTHH:MM:SS> <trecho>`, que a guarda grava a cada mensagem do usuário
+A lista do lote (`lote`) é de outro comando e o `limpar` a deixa. A `resposta` é a linha `<hash marcado> <AAAA-MM-DDTHH:MM:SS> <trecho>`, que a guarda grava a cada mensagem do usuário
 com `Passo` 6 e versão marcada, com os 80 primeiros caracteres dela. O `passo 7` recusa sem ela ou com o hash de outra
 marcação: ela prova que houve mensagem depois da marcação, não que a mensagem aprova.
 
 Recusas de entrada, com 1: `STATUS.md aponta para <documento>, não para <documento>`, `arquivo não existe: <documento>`
-e o caminho passado com pacote aberto. No `marcar` e no `conferir` sem pacote, o caminho tem de ser o `Documento` do
-STATUS.md, gravado antes com `estado set Documento`; com `Documento: nenhum`, com ou sem o caminho, o `marcar` dá
+e o caminho passado com pacote ou lote aberto. No `marcar` e no `conferir` sem pacote, o caminho tem de ser o
+`Documento` do STATUS.md, gravado antes com `estado set Documento`; com `Documento: nenhum`, com ou sem o caminho, o `marcar` dá
 `Documento: nenhum no STATUS.md; abra o documento com harness.py estado set Documento <caminho>` e o `conferir`,
 `Documento: nenhum no STATUS.md; não há versão a conferir`. No `historico` e no `diff --documento` sem o caminho, a
 recusa é `Documento: nenhum no STATUS.md; passe o caminho do documento`.
@@ -225,10 +240,11 @@ def _texto_do_manifesto(itens: list[tuple[str, str]]) -> str:
     return "".join(f"{hash_} {relativo}\n" for hash_, relativo in itens)
 
 
-def hash_da_versao(conteudos: list[tuple[str, bytes]]) -> str:
-    """O hash que o `passo 6` marcaria para estes conteúdos, (caminho relativo, bytes) na ordem do pacote: com um
-    item, o hash dos bytes; com dois ou mais, o hash do texto do manifesto."""
-    if len(conteudos) == 1:
+def hash_da_versao(conteudos: list[tuple[str, bytes]], grupo: bool = False) -> str:
+    """O hash que o `passo 6` marcaria para estes conteúdos, (caminho relativo, bytes) na ordem do pacote: com
+    `grupo` (`Pacote` ou `Lote` no STATUS.md) ou com dois ou mais itens, o hash do texto do manifesto; senão, o hash
+    dos bytes do único item."""
+    if len(conteudos) == 1 and not grupo:
         return hash_dos_bytes(conteudos[0][1])
     texto = _texto_do_manifesto([(hash_dos_bytes(dados), relativo) for relativo, dados in conteudos])
     return hash_dos_bytes(texto.encode("utf-8"))
@@ -256,9 +272,9 @@ def _formas_no_head(raiz: Path, relativo: str, executar) -> list[bytes]:
     return formas
 
 
-def no_head(raiz: Path, documentos: list[str], executar=subprocess.run) -> NoHead:
-    """Confere os documentos no HEAD pelo git, sem a pasta das cópias, de modo que vale noutra máquina. Sem `.git` na
-    raiz, ou com o git indisponível, lança VersaoInvalida."""
+def no_head(raiz: Path, documentos: list[str], executar=subprocess.run, grupo: bool = False) -> NoHead:
+    """Confere os documentos no HEAD pelo git, sem a pasta das cópias, de modo que vale noutra máquina; `grupo` é o do
+    `hash_da_versao`. Sem `.git` na raiz, ou com o git indisponível, lança VersaoInvalida."""
     if not os.path.lexists(raiz / ".git"):
         raise VersaoInvalida("a raiz não é um repositório git")
     try:
@@ -279,7 +295,17 @@ def no_head(raiz: Path, documentos: list[str], executar=subprocess.run) -> NoHea
                 fora.append(relativo)
     except _GitIndisponivel as erro:
         raise VersaoInvalida(f"git indisponível: {erro}") from None
-    return NoHead(commit, None if fora else hash_da_versao(conteudos), tuple(fora))
+    return NoHead(commit, None if fora else hash_da_versao(conteudos, grupo), tuple(fora))
+
+
+def _rotulo(dados: dict[str, str]) -> str:
+    """A palavra das mensagens do ciclo em grupo: `lote` com `Lote` no STATUS.md, senão `pacote`."""
+    return "lote" if estado.CAMPO_LOTE in dados else "pacote"
+
+
+def em_grupo(dados: dict[str, str]) -> bool:
+    """Se o STATUS.md tem `Pacote` ou `Lote`: aí o `passo 6` marca o hash do manifesto, mesmo com um documento só."""
+    return estado.CAMPO_PACOTE in dados or estado.CAMPO_LOTE in dados
 
 
 def _marcar_pacote(raiz: Path, perfil: Perfil, dados: dict[str, str], agora: datetime.datetime | None) -> str:
@@ -287,7 +313,7 @@ def _marcar_pacote(raiz: Path, perfil: Perfil, dados: dict[str, str], agora: dat
 
     Documento ausente lança VersaoInvalida antes de gravar. Se o STATUS.md recusar o hash, as cópias e o manifesto
     recém-gravados são removidos. Com o hash gravado, cada documento entra no próprio histórico."""
-    relativos = estado.documentos(dados)
+    relativos = estado.documentos(dados, raiz)
     faltando = next((relativo for relativo in relativos if not (raiz / relativo).is_file()), None)
     if faltando is not None:
         raise VersaoInvalida(f"arquivo não existe: {faltando}")
@@ -319,7 +345,7 @@ def _marcar_pacote(raiz: Path, perfil: Perfil, dados: dict[str, str], agora: dat
 def marcar(raiz: Path, documento: Path | None, perfil: Perfil, agora: datetime.datetime | None = None) -> str:
     """Grava a cópia do documento e o hash dela em `Versao-aprovacao`; devolve o hash.
 
-    Com `Pacote` no STATUS.md, marca o pacote inteiro (spec 4b, §9.2) e recusa o caminho. Sem pacote, o documento
+    Com `Pacote` ou `Lote` no STATUS.md, marca o grupo inteiro (spec 4b, §9.2) e recusa o caminho. Sem pacote, o documento
     é relativo à raiz ou absoluto e precisa ser o `Documento` do STATUS.md; sem ele, vale o `Documento`. Lança
     VersaoInvalida com `Documento: nenhum` (com ou sem o caminho), se o caminho não é o `Documento`, se está fora da
     raiz ou se o arquivo não existe, e EstadoInvalido se o STATUS.md não
@@ -329,9 +355,12 @@ def marcar(raiz: Path, documento: Path | None, perfil: Perfil, agora: datetime.d
     """
     status = raiz / perfil.caminhos.status
     dados = estado.ler(status, perfil)
-    if estado.CAMPO_PACOTE in dados:
+    if em_grupo(dados):
         if documento is not None:
-            raise VersaoInvalida("Pacote aberto: versao marcar marca o pacote inteiro; rode sem o caminho")
+            rotulo = _rotulo(dados)
+            raise VersaoInvalida(
+                f"{rotulo.capitalize()} aberto: versao marcar marca o {rotulo} inteiro; rode sem o caminho"
+            )
         return _marcar_pacote(raiz, perfil, dados, agora)
     if dados["Documento"] == estado.SEM_DOCUMENTO:
         raise VersaoInvalida(RECUSA_MARCAR_NENHUM)
@@ -408,7 +437,8 @@ def _conferir_pacote(
 ) -> tuple[bool, str]:
     """O `conferir` com pacote (spec 4b, §9.2): o manifesto contra o `Versao-aprovacao` e cada documento, ou só o
     `documento`, contra o hash do manifesto. Sem o manifesto, compara só o hash do manifesto refeito do disco."""
-    relativos = estado.documentos(dados)
+    relativos = estado.documentos(dados, raiz)
+    rotulo = _rotulo(dados)
     marcado = dados[CAMPO]
     if marcado == SEM_VERSAO:
         return False, "sem versão marcada no STATUS.md"
@@ -421,18 +451,20 @@ def _conferir_pacote(
             _texto_do_manifesto([(hash_curto(raiz / relativo), relativo) for relativo in relativos]).encode("utf-8")
         )
         if atual == marcado:
-            return True, f"OK: pacote {marcado} confere ({len(relativos)} documentos)\n{_AVISO_SEM_MANIFESTO}"
-        return False, f"DIVERGE: pacote mudou desde a marcação ({atual} != {marcado})\n{_SEM_MANIFESTO_NAO_DA}"
+            return True, f"OK: {rotulo} {marcado} confere ({len(relativos)} documentos)\n{_AVISO_SEM_MANIFESTO}"
+        return False, f"DIVERGE: {rotulo} mudou desde a marcação ({atual} != {marcado})\n{_SEM_MANIFESTO_NAO_DA}"
     if hash_dos_bytes(_texto_do_manifesto(manifesto).encode("utf-8")) != marcado:
-        return False, f"o manifesto do pacote não é o da marcação {marcado}; {_MARQUE_DE_NOVO}"
+        return False, f"o manifesto do {rotulo} não é o da marcação {marcado}; {_MARQUE_DE_NOVO}"
     if [relativo for _, relativo in manifesto] != relativos:
-        return False, f"o Pacote do STATUS.md mudou depois da marcação; {_MARQUE_DE_NOVO}"
+        mudou = "a lista do lote" if rotulo == "lote" else "o Pacote do STATUS.md"
+        return False, f"{mudou} mudou depois da marcação; {_MARQUE_DE_NOVO}"
     hashes = {relativo: hash_ for hash_, relativo in manifesto}
     alvos = relativos
     if documento is not None:
         relativo = _relativo(raiz, documento)
         if relativo not in hashes:
-            return False, f"{relativo} fora do Pacote do STATUS.md"
+            fora = "fora do lote" if rotulo == "lote" else "fora do Pacote do STATUS.md"
+            return False, f"{relativo} {fora}"
         alvos = [relativo]
     divergentes: list[str] = []
     linhas: list[str] = []
@@ -450,22 +482,22 @@ def _conferir_pacote(
     if divergentes:
         cabecalho = f"DIVERGE: {len(divergentes)} de {quantos} mudaram desde a marcação: {comum.juntar(divergentes)}"
     else:
-        cabecalho = f"OK: pacote {marcado} confere ({quantos})"
+        cabecalho = f"OK: {rotulo} {marcado} confere ({quantos})"
         if documento is not None:
-            cabecalho = f"OK: {alvos[0]} confere (pacote {marcado})"
+            cabecalho = f"OK: {alvos[0]} confere ({rotulo} {marcado})"
     return not divergentes, "\n".join([cabecalho] + linhas)
 
 
 def conferir(raiz: Path, documento: Path | None, perfil: Perfil, executar=subprocess.run) -> tuple[bool, str]:
     """Diz se o documento ainda é a versão marcada: `(confere, mensagem pronta para imprimir)`.
 
-    Com `Pacote` no STATUS.md, confere o pacote, ou só o `documento` dele (spec 4b, §9.2). Sem pacote, as
+    Com `Pacote` ou `Lote` no STATUS.md, confere o grupo, ou só o `documento` dele (spec 4b, §9.2). Sem pacote, as
     verificações, em ordem: `Documento` do STATUS.md igual ao argumento (sem argumento, vale o `Documento`), versão
     marcada, arquivo existente e, por fim, o hash. Lança VersaoInvalida para documento fora da raiz ou para
     `Documento: nenhum`, com ou sem argumento, e EstadoInvalido se o STATUS.md não serve. `executar` é injetável para teste.
     """
     dados = estado.ler(raiz / perfil.caminhos.status, perfil)
-    if estado.CAMPO_PACOTE in dados:
+    if em_grupo(dados):
         return _conferir_pacote(raiz, dados, documento, executar)
     if dados["Documento"] == estado.SEM_DOCUMENTO:
         raise VersaoInvalida(RECUSA_CONFERIR_NENHUM)
@@ -628,11 +660,13 @@ def limpar(raiz: Path, perfil: Perfil) -> None:
 
 
 def apagar_copias(raiz: Path) -> None:
-    """Apaga as cópias de `PASTA_APROVACAO`, o manifesto, a `resposta` e o histórico, sem tocar no STATUS.md."""
+    """Apaga as cópias de `PASTA_APROVACAO`, o manifesto, a `resposta`, o histórico e o resumo escrito, sem tocar no
+    STATUS.md nem na lista do lote."""
+    (raiz / comum.ARQUIVO_RESUMO).unlink(missing_ok=True)
     pasta = raiz / comum.PASTA_APROVACAO
     if pasta.is_dir():
         for copia in pasta.iterdir():
-            if copia.is_file():
+            if copia.is_file() and copia.name != estado.ARQUIVO_LOTE:
                 copia.unlink()
         if (pasta / PASTA_HISTORICO).is_dir():
             shutil.rmtree(pasta / PASTA_HISTORICO)
