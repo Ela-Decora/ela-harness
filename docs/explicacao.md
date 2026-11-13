@@ -30,9 +30,13 @@ flowchart TD
   P4 --> P5["5 Revisão por subagente"]
   P5 -->|correção| P4
   P5 --> P6["6 Aprovação humana"]
-  P6 -->|pedido de mudança| P3
+  P6 -->|correção| P3
   P6 -->|aprovado| P7["7 Registro e commit"]
 ```
+
+No passo 6, o pedido segue um de três caminhos: o ajuste, que fica no 6 sem revisor; a volta de correção, ao 3, com uma
+rodada do revisor no diff; e a volta de escopo, que sobe pela escada das pendências. O núcleo trava a estrutura do ajuste:
+seção ou ID novo ou removido o torna volta de correção.
 
 ## O lote e o migrar
 

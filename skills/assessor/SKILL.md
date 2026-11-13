@@ -38,7 +38,7 @@ Por `grep`, leia só as linhas que citam o tema: no arquivo de decisões, nas De
 - as opções candidatas, de 2 a 5, com "manter como está" ou "adiar a decisão" entre elas quando couber; uma opção só não é estudo: diga isso e pare;
 - o que o enquadramento inferiu, marcado `[A CONFIRMAR]`.
 
-Na mesma mensagem, despache o agente `ela-harness:pesquisador-opcoes` em segundo plano, anote a hora do despacho (`date`) e diga em uma linha que a pesquisa corre com prazo de 15 minutos e que, se não voltar nele, basta o usuário dizer "seguir". No despacho, só textos curtos e caminhos:
+Na mesma mensagem, despache o agente `ela-harness:pesquisador-opcoes` em segundo plano, anote a hora do despacho (`date`) e diga em uma linha que a pesquisa corre com prazo de 15 minutos e que, se não voltar nele, pergunto se espero ou sigo sem ela. No despacho, só textos curtos e caminhos:
 
 ```
 Tema: {tema}
@@ -54,7 +54,20 @@ Peça correção do enquadramento; nenhuma outra pergunta nesta mensagem.
 
 ## Passo 2: pesquisa
 
-Enquanto o pesquisador corre, crie o estudo pelo molde com o enquadramento: Contexto, Critérios e a lista das opções, ainda sem as seis linhas de cada uma; `Decisão: pendente`. Espere o retorno até 15 minutos a partir do despacho; ao retomar sem o relatório, compare a hora (`date`) com a do despacho. Retorno no prazo: grave-o na seção "Pesquisa" como veio, com a data e a hora do despacho. Sem retorno no prazo, ou com o usuário dizendo "seguir": pare o agente (`TaskStop`), siga com o enquadramento e as fontes locais, marque cada fato sem fonte como `sem fonte` e anote em "Pesquisa" que o relatório entra numa revisão. Opção que o usuário acrescentou na correção do passo 1 ganha um despacho só dela, com o mesmo prazo.
+Enquanto o pesquisador corre, crie o estudo pelo molde com o enquadramento: Contexto, Critérios e a lista das opções, ainda sem as seis linhas de cada uma; `Decisão: pendente`. Espere o retorno até 15 minutos a partir do despacho. Ao retomar sem o relatório, rode `date` e compare com a hora do despacho. Ao receber o relatório, rode `date` e compare com a hora do despacho, sempre.
+
+- No prazo: grave o relatório na seção "Pesquisa" como veio, com a data e a hora do despacho.
+- Caso 1, o relatório chegou além do prazo antes de a sessão seguir: grave-o em "Pesquisa" como veio, com a nota `chegou às <hora>, <n> min além do prazo`.
+- Caso 2, o prazo passou sem relatório: ao retomar, pergunte pela ferramenta de opções, com `Esperar a pesquisa (Recommended)` e `Seguir sem ela`. A sessão não corta sozinha.
+  - Esperar: encerre o turno esperando a notificação do agente, sem perguntar de novo. Se o relatório chegar depois, cai no caso 1.
+  - Seguir sem ela: pare o agente (`TaskStop`) e siga com o enquadramento e as fontes locais. Marque cada fato sem fonte como `sem fonte`. Anote em "Pesquisa" que o relatório entra numa revisão.
+- Caso 3, o relatório chegou depois de a sessão seguir, porque o `TaskStop` não pegou a tempo.
+  - Antes da resposta do usuário ao parecer: o relatório entra no estudo, e o parecer diz o que mudou.
+  - Depois da decisão: o estudo não muda. "Pesquisa" anota a chegada, e a sessão oferece a revisão pelo caminho de "Antes do passo 1".
+
+O "seguir" do usuário, a qualquer momento, também para o agente (`TaskStop`) e leva ao caso 2 sem a pergunta.
+
+Opção que o usuário acrescentou na correção do passo 1 ganha um despacho só dela, com o mesmo prazo.
 
 ## Passo 3: estudo
 
@@ -66,6 +79,6 @@ Leia agora o molde "Parecer do assessor" de `${CLAUDE_PLUGIN_ROOT}/nucleo/comum/
 
 ## Passo 5: resposta
 
-Com a resposta do usuário, grave no cabeçalho do estudo `Decisão: <opção> em <AAAA-MM-DD>, registro pendente` e, na seção "Decisão do usuário", a resposta entre aspas e a data. "Adiar" deixa `Decisão: pendente` e grava o motivo na mesma seção. Rode `harness.py estudos` de novo e cole a linha. Registre na seção Medições do arquivo de atritos os tokens, as chamadas e a duração do pesquisador, lidos da notificação do agente. Commit sem pedido: `docs(harness): estudo <tema>`.
+Com a resposta do usuário, grave no cabeçalho do estudo `Decisão: <opção> em <AAAA-MM-DD>, registro pendente` e, na seção "Decisão do usuário", a resposta entre aspas e a data. "Adiar" deixa `Decisão: pendente` e grava o motivo na mesma seção. Rode `harness.py estudos` de novo e cole a linha. Registre na seção Medições do arquivo de atritos os tokens, as chamadas e a duração do pesquisador, lidos da notificação do agente, e a linha de medição `retorno às <hora>[, <n> min além do prazo de 15]; <esperado | seguido sem ela | chegou depois da decisão>`. Commit sem pedido: `docs(harness): estudo <tema>`.
 
 Resposta que muda o enquadramento: volte ao passo em que a mudança entra; o estudo é reescrito, não duplicado. O registro da decisão (Ruling ou ADR) é do passo 7 da `refinar-documento`, que lê `harness.py estudos --pendentes` e troca o `registro pendente` do estudo por `registrada em <arquivo>`.

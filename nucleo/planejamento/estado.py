@@ -23,7 +23,7 @@ Valida e imprime o STATUS.md, o estado curto do planejamento (`caminhos.status`)
 Sem ação, imprime o arquivo em texto canônico e sai com 0; espaço no fim da linha, linha em branco e quebra de linha
 do Windows passam. Arquivo inválido sai com 1 e `STATUS.md inválido: <erro>; <erro>`. O formato é o título fixo e um
 campo por linha, nesta ordem, em até 2.000 caracteres; os gates do perfil ficam numa linha só, na ordem das fases, e o
-`Pacote` e o `Lote`, opcionais, vêm logo depois do `Documento`, nessa ordem. Um projeto novo começa assim:
+`Pacote`, o `Lote` e o `Ajuste`, opcionais, vêm logo depois do `Documento`, nessa ordem. Um projeto novo começa assim:
 
 ```text
 # Status do planejamento
@@ -46,6 +46,7 @@ com cada mudança automática numa linha a mais. Recusa sai com 1 e `recusado: <
 | `Documento` | `nenhum`, ou um `.md` dentro da pasta do planejamento, com caminho normalizado e sem espaço |
 | `Pacote` | de 2 a 6 caminhos como o do `Documento`, separados por um espaço, sem repetição; `—` tira a linha |
 | `Lote` | `<prefixo de pendência>-NN (<N> documentos)` ou `migração v<de>→v<para> (<N> documentos)`, com `(1 documento)` no singular; só pelo `estado lote`, pelo `migrar` e pelo `fechar` |
+| `Ajuste` | `aberto`; só pelo `ajuste`, pelo `passo`, pelo `versao limpar` e pelo `fechar`; o `Documento` novo o tira |
 | `Passo` | inteiro de 0 a 7 |
 | `Rodada` | inteiro maior ou igual a 0 |
 | `Proximo` | uma linha, até 200 caracteres |
@@ -114,7 +115,10 @@ CAMPO_PACOTE = "Pacote"
 # O `Lote` vem depois do `Pacote`: os dois não se abrem juntos. A lista dos documentos dele fica fora do STATUS.md, no
 # arquivo `ARQUIVO_LOTE` da pasta da aprovação.
 CAMPO_LOTE = "Lote"
-CAMPOS_OPCIONAIS = (CAMPO_PACOTE, CAMPO_LOTE)
+# O `Ajuste` vem depois do `Lote`: marca a correção pequena do passo 6, que a guarda do passo 6 e o `fechar` conhecem.
+CAMPO_AJUSTE = "Ajuste"
+AJUSTE_ABERTO = "aberto"
+CAMPOS_OPCIONAIS = (CAMPO_PACOTE, CAMPO_LOTE, CAMPO_AJUSTE)
 ARQUIVO_LOTE = "lote"
 LIMITE_PACOTE = 6
 SEM_PACOTE = "—"
@@ -152,8 +156,8 @@ def campos(perfil: Perfil) -> tuple[str, ...]:
 
 
 def ordem(perfil: Perfil) -> tuple[str, ...]:
-    """Todos os campos do STATUS.md na ordem do arquivo: os de `campos`, e o `Pacote` e o `Lote` logo depois do
-    `Documento`."""
+    """Todos os campos do STATUS.md na ordem do arquivo: os de `campos`, e o `Pacote`, o `Lote` e o `Ajuste` logo
+    depois do `Documento`."""
     nomes = campos(perfil)
     depois = nomes.index("Documento") + 1
     return nomes[:depois] + CAMPOS_OPCIONAIS + nomes[depois:]
@@ -266,6 +270,9 @@ def validar_valor(campo: str, valor: str, perfil: Perfil) -> str | None:
         return _motivo_do_pacote(valor, perfil)
     elif campo == CAMPO_LOTE:
         return _motivo_do_lote(valor, perfil)
+    elif campo == CAMPO_AJUSTE:
+        if valor != AJUSTE_ABERTO:
+            return f'esperado "{AJUSTE_ABERTO}", encontrado "{valor}"'
     elif campo == "Passo":
         if not _RE_NUMERO.fullmatch(valor):
             return f'esperado inteiro de 0 a 7, encontrado "{valor}"'
@@ -522,6 +529,23 @@ def _conferir_valor(campo: str, valor: str, perfil: Perfil) -> None:
 
 
 def _mudancas_do_pacote(
+    mudancas: dict[str, str], valores: dict[str, str], lote: list[str] | None = None
+) -> dict[str, str]:
+    """As mudanças automáticas do `Pacote`, do `Lote` e do `Ajuste`: as do pacote e do lote, mais o `Ajuste` tirado
+    quando o `Documento` muda com o `Ajuste` aberto."""
+    automaticas = _mudancas_do_pacote_e_do_lote(mudancas, valores, lote)
+    documento = {**mudancas, **automaticas}.get("Documento")
+    if (
+        valores.get(CAMPO_AJUSTE) == AJUSTE_ABERTO
+        and mudancas.get(CAMPO_AJUSTE) is None
+        and documento is not None
+        and documento != valores.get("Documento")
+    ):
+        automaticas[CAMPO_AJUSTE] = SEM_PACOTE
+    return automaticas
+
+
+def _mudancas_do_pacote_e_do_lote(
     mudancas: dict[str, str], valores: dict[str, str], lote: list[str] | None = None
 ) -> dict[str, str]:
     """As mudanças automáticas que o `Pacote` e o `Lote` trazem (spec 4b, §9.1). Lança EstadoInvalido para `Documento`

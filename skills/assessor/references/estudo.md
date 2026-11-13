@@ -45,7 +45,7 @@ Decisão: pendente
 
 ## Pesquisa
 
-<o relatório do pesquisador-opcoes como veio, com a data e a hora do despacho; ou a nota de que o relatório entra numa revisão>
+<o relatório do pesquisador-opcoes como veio, com a data e a hora do despacho; ou a nota de que o relatório entra numa revisão; ou, fora do prazo, a nota `chegou às <hora>, <n> min além do prazo`>
 
 ## Decisão do usuário
 

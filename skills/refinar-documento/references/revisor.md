@@ -5,7 +5,7 @@ Despache o agente `ela-harness:revisor-requisitos` com um dos blocos abaixo pree
 O arquivo de princípios sai do título de nível 1 do molde: `# Entidade:` dá `.claude/harness/nucleo/skills/gerar-modulos/references/entidades.md`; `# Tela:`, o `telas.md` da mesma pasta; `# Módulo:`, o `modulos.md`. Outro título dá `não há`.
 
 - Rodada 1: sempre, com o modelo do agente.
-- Rodada 2: só se a correção da rodada 1 reescreveu uma seção ou acrescentou ID ou regra; ajuste de redação não conta. Mesmo modelo, bloco "Rodada 2", com os achados anteriores e o `Escopo:` dos trechos alterados.
+- Rodada 2: fora da volta de correção, só se a correção da rodada 1 reescreveu uma seção ou acrescentou ID ou regra; mudança só de redação não conta. Mesmo modelo, bloco "Rodada 2", com os achados anteriores e o `Escopo:` dos trechos alterados.
 - Não há rodada 3: o que sobrar vai ao usuário no passo 6.
 
 Despache sempre em segundo plano. A mensagem do despacho termina com a linha `Revisor em segundo plano (rodada <n>); o relato vem quando ele voltar.`, e o turno acaba nela. Até a notificação do agente, nenhuma mensagem traz veredito, achado ou palpite do que ele vai achar; se o usuário pedir o resultado antes, diga que o revisor ainda não voltou. Enquanto ele roda, faça só o que não depende do veredito, sem editar o documento revisado. Ao fim de cada rodada, registre os tokens e a duração lidos da notificação do agente por `harness.py registrar medicao "<medição>" "<valor>"`.
@@ -53,9 +53,25 @@ Achados anteriores: {lista numerada, uma linha cada}
 Escopo: {os trechos alterados desde a rodada 1}
 ```
 
+## Volta de correção
+
+É o pedido de mudança do passo 6 que volta ao passo 3, como [aprovacao.md](aprovacao.md) diz. O despacho é o da "Rodada 1" do modo revisão, com as cinco linhas abaixo no lugar do documento inteiro. Num pacote, a base é o bloco "Pacote", rodada 1, com as mesmas cinco linhas. Num lote, é o bloco "Lote", com estes valores, um despacho por camada com diff. O agente lê o diff e, do documento, só a seção de cada trecho. A linha `Volta: correção` diz ao agente que o `Escopo:` é o pedido do usuário, e não o texto de uma pendência.
+
+Antes do despacho, rode `harness.py versao resumo --desde-revisada`. Ele grava o diff de cada camada desde a última versão que o revisor viu, com os ajustes do meio.
+
+```
+Volta: correção
+Diff: {.claude/harness/dossie/diff-camada-<N>.diff, que o versao resumo --desde-revisada grava}
+Afetados: {.claude/harness/dossie/afetados.txt, só quando o afetados do ciclo o gravou}
+Escopo: {o pedido do usuário, nas palavras dele}
+Critério: conteúdo
+```
+
+Sem o `afetados.txt` do ciclo, deixe a linha `Afetados:` de fora. Não há rodada 2 na volta de correção: o que sobrar vai ao usuário no passo 6.
+
 ## Pacote
 
-Um despacho para o pacote inteiro, com a lista `Documentos:` no lugar do `Documento:`. A rodada 2 traz só os documentos que a correção da rodada 1 reescreveu numa seção ou em que acrescentou ID ou regra, cada um com o seu `Escopo:`. No "mudar <documento>" do passo 6, o despacho é o de documento sozinho, rodada 1, com `Escopo:` dos trechos alterados.
+Um despacho para o pacote inteiro, com a lista `Documentos:` no lugar do `Documento:`. A rodada 2 traz só os documentos que a correção da rodada 1 reescreveu numa seção ou em que acrescentou ID ou regra, cada um com o seu `Escopo:`. No "mudar <documento>" do passo 6, a volta de correção segue o bloco "Volta de correção".
 
 ```
 Rodada: 1

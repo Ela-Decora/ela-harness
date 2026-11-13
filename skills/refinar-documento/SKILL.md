@@ -69,11 +69,11 @@ Começa quando a pesquisa do documento voltou, ou quando o usuário escolheu esc
 
 ## Passo 5: revisão por subagente
 
-O `ela-harness:revisor-requisitos`, em segundo plano: rodada 1 sempre; rodada 2 só se a correção reescreveu uma seção ou acrescentou ID ou regra; não há rodada 3. Relato no molde "Relato da revisão" de `${CLAUDE_PLUGIN_ROOT}/nucleo/comum/saida.md`. Num pacote, um despacho para todos. Leia [references/revisor.md](references/revisor.md).
+O `ela-harness:revisor-requisitos`, em segundo plano: rodada 1 sempre; rodada 2 só se a correção reescreveu uma seção ou acrescentou ID ou regra, e nunca na volta de correção; não há rodada 3. Relato no molde "Relato da revisão" de `${CLAUDE_PLUGIN_ROOT}/nucleo/comum/saida.md`. Num pacote, um despacho para todos. Leia [references/revisor.md](references/revisor.md).
 
 ## Passo 6: aprovação humana
 
-`harness.py passo 6` marca a versão antes da mensagem fixa. Ao retomar no passo 6 ou 7, `harness.py versao conferir` antes de tudo. Num pacote, a marcação vale para a lista, e as respostas são "aprovado", "mudar <documento>" e "tirar <documento> do pacote". Leia [references/aprovacao.md](references/aprovacao.md).
+`harness.py passo 6` marca a versão antes da mensagem fixa. Ao retomar no passo 6 ou 7, `harness.py versao conferir` antes de tudo; com `Ajuste` no STATUS, siga o ajuste, sem o `versao conferir`. O pedido de mudança segue um de três caminhos: ajuste, volta de correção ou volta de escopo. Num pacote, a marcação vale para a lista, e as respostas são "aprovado", "mudar <documento>" e "tirar <documento> do pacote". Leia [references/aprovacao.md](references/aprovacao.md).
 
 ## Passo 7: registro
 

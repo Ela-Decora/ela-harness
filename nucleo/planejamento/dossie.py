@@ -10,6 +10,7 @@ from pathlib import Path
 import backlog
 import checar
 import comum
+import composicao
 import estado
 import rastreio
 import registro
@@ -21,13 +22,19 @@ Monta o dossiê de cada documento, as fontes dele achadas por script, num arquiv
 Sem argumento, usa os documentos em refino do STATUS.md, o `Pacote` ou o `Documento`. Grava
 `.claude/harness/dossie/<nome do primeiro documento>.md`, refeito a cada execução; a mesma entrada dá o mesmo
 arquivo. O resumo tem até 20 linhas: o arquivo, uma linha por documento com as contagens (com `Rulings novos` e
-`prováveis alvos`, no documento com o item 7) e os itens do gate, os IDs sem cobertura e os avisos. Com `--verbose`,
-imprime o arquivo inteiro. Para cada documento, o dossiê junta:
+`prováveis alvos`, no documento com o item 7) e os itens do gate, o bloco do pacote do módulo, os IDs sem cobertura e
+os avisos. Com `--verbose`, imprime o arquivo inteiro. Para cada documento, o dossiê junta:
 
 1. o contrato: o molde e os títulos de nível 1 a 3 dele;
 2. as linhas dos documentos aprovados que linkam o documento ou citam o nome do arquivo dele;
 3. os IDs citados nessas linhas, com a linha da definição;
-4. os links que o documento faz para outros documentos do planejamento, com o status de cada destino;
+4. os links que o documento faz para outros documentos do planejamento, com o status de cada destino, e, no módulo
+   (o documento que casa o `por` de um item `ligados` do gate da fase dele), o bloco `### Pacote do módulo (<N>)`,
+   também no resumo: uma linha `- <caminho>` por derivado, na ordem dos links, ou
+   `- nenhum: os rascunhos linkados são de outro módulo` (também quando todos estão em refino ou aprovados). Os derivados são os documentos da fase no disco, não
+   aprovados na tabela, que casam os `documentos` desse item e que o módulo linka fora das exclusões, as mesmas do
+   `harness.py proximo`: a seção de nível 2 com "outros módulos" no título, a lista aberta por uma linha que não é
+   item e diz "outros módulos" ou "só lê", e a linha com a anotação `(módulo <nome>)` de outro módulo;
 5. os termos do documento (o do título de nível 1 e o do nome do arquivo), procurados sem acento: as linhas do
    arquivo de decisões (os Rulings primeiro), das pendências abertas e do rascunho; nos `.md` e `.txt` dos relatórios
    de pesquisa (só as subpastas `pesquisa-*` de `caminhos.pesquisas`) e das fontes (`caminhos.fontes`), cada arquivo
@@ -60,6 +67,8 @@ TITULO_RULINGS = "Rulings depois da aprovação"
 SEM_DATA = "sem data na tabela de artefatos"
 ROTULO_RULINGS = "Rulings novos"
 ROTULO_PROVAVEIS = "prováveis alvos"
+TITULO_PACOTE = "Pacote do módulo"
+SEM_DERIVADO = "nenhum: os rascunhos linkados são de outro módulo"
 
 _PREFIXO_DA_PESQUISA = "pesquisa-"
 _APROVADO_EM = "aprovado em "
@@ -79,6 +88,7 @@ class Documento:
     gate: tuple[str, ...]
     sem_cobertura: int
     avisos: tuple[str, ...]
+    pacote: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -269,6 +279,24 @@ def _links(texto: str, relativo: str, perfil: Perfil, status: dict[str, str]) ->
     return links
 
 
+def _pacote(raiz: Path, perfil: Perfil, fontes: _Fontes, relativo: str, texto: str | None) -> tuple[str, ...]:
+    """O bloco "Pacote do módulo", só no documento que casa o `por` de um item `ligados`: os derivados do
+    `composicao`, com os documentos da fase no disco e o status da tabela, uma linha `- <caminho>` cada, na ordem dos
+    links; sem derivado, a linha `SEM_DERIVADO`."""
+    if not composicao.e_modulo(perfil, relativo):
+        return ()
+    fase = perfil.fase_do_documento(relativo)
+    da_fase = [documento for documento in rastreio.documentos_do_planejamento(raiz, perfil)
+               if perfil.fase_do_documento(documento) == fase]
+
+    def aprovado(documento: str) -> bool:
+        return rastreio.grupo_do_status(fontes.status.get(documento)) == rastreio.APROVADO
+
+    derivados = composicao.derivados(perfil, relativo, texto or "", da_fase, aprovado)
+    linhas = [f"- {documento}" for documento in derivados] or [f"- {SEM_DERIVADO}"]
+    return (f"### {TITULO_PACOTE} ({len(derivados)})", *linhas)
+
+
 def _pasta(padrao: str) -> str:
     """`2-intermediario/Modulo/*.md` vira `2-intermediario/Modulo/`; outro padrão fica como está."""
     return padrao[: -len("*.md")] if padrao.endswith("/*.md") else padrao
@@ -390,6 +418,9 @@ def _documento(raiz: Path, perfil: Perfil, fontes: _Fontes, relativo: str, cache
     links = _links(texto, relativo, perfil, fontes.status) if texto is not None else []
     saida += ["", f"### Links que o documento faz ({len(links)})"]
     saida += [f"- {destino} · {grupo} · {secao} (L{numero})" for destino, grupo, secao, numero in links]
+    pacote = _pacote(raiz, perfil, fontes, relativo, texto)
+    if pacote:
+        saida += ["", *pacote]
 
     termos = rastreio.termos_do_documento(relativo, texto)
     padroes = [rastreio.padrao_do_termo(termo) for termo in termos]
@@ -431,7 +462,8 @@ def _documento(raiz: Path, perfil: Perfil, fontes: _Fontes, relativo: str, cache
             saida += ["", f"### {TITULO_RULINGS}", SEM_DATA]
             avisos.append(f"{SEM_DATA}: {relativo}")
     return Documento(
-        relativo, tuple(saida), contagens, tuple(item.verificacao for item in itens), len(faltam), tuple(avisos)
+        relativo, tuple(saida), contagens, tuple(item.verificacao for item in itens), len(faltam), tuple(avisos),
+        pacote,
     )
 
 
@@ -471,6 +503,7 @@ def resumo(dossie: Dossie) -> str:
         contagens = " · ".join(f"{rotulo} {valor}" for rotulo, valor in documento.contagens)
         saida.append(f"{nome.ljust(largura)} {contagens} · gate: {', '.join(documento.gate) or '—'}")
     for nome, documento in zip(nomes, dossie.documentos):
+        saida += documento.pacote
         if documento.sem_cobertura:
             saida.append(f"{nome}: {documento.sem_cobertura} IDs sem cobertura, lista no arquivo")
         saida += [f"aviso: {aviso}" for aviso in documento.avisos]

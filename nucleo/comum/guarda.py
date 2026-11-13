@@ -414,6 +414,8 @@ def _sessao(raiz: Path, perfil: Perfil | PerfilDesenvolvimento | PerfilComum) ->
             documentos = tuple(posixpath.normpath(documento) for documento in estado.documentos(dados, raiz))
         except estado.EstadoInvalido:
             documentos = ()  # a lista do lote falta ou não confere: nenhum documento em aprovação
+        if dados["Passo"] == "6" and estado.CAMPO_AJUSTE in dados:
+            documentos = ()  # o ajuste aberto libera a edição no passo 6
         passo = dados["Passo"] if documentos else None
     arvore = raiz_da_arvore(raiz) or raiz
     na_lane = isinstance(perfil, PerfilDesenvolvimento) and _na_lane(arvore, perfil)
@@ -430,7 +432,7 @@ def _outra_arvore(alvo: Path, raiz_alvo: Path, sessao: _Sessao) -> Decisao:
 def _documento_em_aprovacao(documento: str, sessao: _Sessao) -> Decisao:
     return _negar(
         f"{documento} tem versão em aprovação (passo {sessao.passo}); para mudar, rode harness.py passo 3 "
-        "(ou passo 2), edite e marque de novo com harness.py passo 6"
+        "(ou passo 2) ou, num ajuste, harness.py ajuste, edite e marque de novo com harness.py passo 6"
     )
 
 

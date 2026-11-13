@@ -324,14 +324,15 @@ def gravar_artefato(texto: str, caminho: str, camada: str, status: str, data: st
     return "\n".join(linhas)
 
 
-_ARQUIVO_MD = r"`?(?:[\w.-]+/)*[\w.-]+\.md`?"
+_LINK_MD = r"\[[^\]]*\]\(<?(?:[\w./-])*\.md(?:#[^)>]*)?>?\)"
+_ARQUIVO_MD = rf"(?:`?(?:[\w.-]+/)*[\w.-]+\.md`?|{_LINK_MD})"
 _RE_ANTES_DO = re.compile(rf"\bantes d[oa] {_ARQUIVO_MD}(?:(?:,? e|,) d[oa] {_ARQUIVO_MD})*", re.IGNORECASE)
-_RE_ARQUIVO_DO_TRECHO = re.compile(r"\b(d[oa]) `?((?:[\w.-]+/)*[\w.-]+\.md)`?", re.IGNORECASE)
+_RE_ARQUIVO_DO_TRECHO = re.compile(r"\b(d[oa]) (?:`?|\[[^\]]*\]\(<?)((?:[\w.-]+/)*[\w.-]+\.md)", re.IGNORECASE)
 
 
 def antes_do_arquivo(destino: str) -> tuple[tuple[tuple[str, str], ...], str]:
     """`(trechos, resto)` dos trechos `antes do <arquivo>.md` ou `antes da <arquivo>.md` do destino, com ou sem
-    crases e sem distinção de maiúsculas, cada um com os arquivos que o seguem por `, do`, `e do` ou `, e do` (ou
+    crases, ou com o arquivo como link Markdown (`[rótulo](caminho.md)`, com âncora opcional), e sem distinção de maiúsculas, cada um com os arquivos que o seguem por `, do`, `e do` ou `, e do` (ou
     `da`). Cada arquivo, na ordem do destino, dá `(arquivo, rótulo)`: o nome do arquivo, o último segmento do caminho,
     e o rótulo `antes d[oa] <arquivo>`, em minúsculas no `antes d[oa]`. O resto é o destino sem os trechos. Sem
     trecho, `((), destino)`."""

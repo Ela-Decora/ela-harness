@@ -1,6 +1,6 @@
 ---
 name: gate-fase
-description: Fecha uma camada do planejamento: roda o checklist do gate (script e revisor), apresenta o veredito e registra a aprovação dada pelo usuário.
+description: Fecha uma camada do planejamento: roda o checklist do gate (script e revisor), apresenta o veredito e registra a aprovação dada pelo usuário. Também libera o commit de um gate que espera.
 argument-hint: "[gate, como no STATUS.md]"
 disable-model-invocation: true
 allowed-tools: Bash(python3 "${CLAUDE_PROJECT_DIR}"/.claude/harness/harness.py perfil *), Bash(python3 .claude/harness/harness.py perfil *), Bash(python3 .claude/harness/harness.py gate *), Bash(python3 .claude/harness/harness.py passagem leitor *)
@@ -20,8 +20,10 @@ Quatro regras sem exceção:
 
 - Só o usuário aprova o gate, com a palavra dele nesta conversa.
 - Item que bloqueia só passa com dispensa explícita do usuário, item a item, pelo número e com motivo; o do leitor frio não se dispensa.
-- O commit sai sem pedido, logo depois do registro da aprovação; se o usuário pedir para esperar, espere.
+- O commit sai sem pedido, logo depois do registro da aprovação; se o usuário pedir para esperar, espere, e a espera fica no STATUS (passo 5).
 - Esta skill não edita os documentos da camada. Correção é pela `/ela-harness:refinar-documento <documento>`; depois, rode o gate de novo.
+
+Retomada: com "commit do <gate> quando o usuário liberar" no `Proximo` do STATUS, vá ao passo 6: pergunte se o usuário libera e, liberado, siga o passo 6; sem refazer o gate.
 
 Nos comandos, `harness.py` abrevia `python3 .claude/harness/harness.py`.
 
@@ -73,6 +75,8 @@ Com a palavra do usuário, numa chamada só, os `set` encadeados por `&&`, nesta
 
 O script só deixa a `Fase` avançar depois do gate aprovado, por isso o gate vem primeiro; a fase nova já sai com o gate dela em `pendente`. No último gate, a `Fase` fica: tire o `set Fase` da cadeia.
 
+Se o usuário pediu para esperar o commit, o `passo 0` da cadeia leva `--proximo "commit do <gate> quando o usuário liberar"`, para a espera sobreviver a um `/clear`.
+
 No arquivo de decisões, na seção de aprovações: data, gate, a resposta do usuário entre aspas, o veredito ("FAIL com dispensa dos itens N" quando houve dispensa), os itens com atenção e cada dispensa com o motivo. Pendência dispensada continua `aberta`, com o destino trocado por `harness.py backlog destino <prefixo>-NN "<destino>" --dispensa "<motivo>"`.
 
 Com o item do leitor frio, a linha de aprovação cita o caminho do gabarito, o gabarito entra no commit do gate, e as medições da linha `leitor:` (tempo, tokens, custo, turnos e negações) entram por `harness.py registrar medicao "<medição>" "<valor>"`.
@@ -82,3 +86,5 @@ Registre os tokens e a duração do `revisor-gate`, lidos da notificação do ag
 ## Passo 6: commit
 
 Depois do registro, sem pedido: `docs(planejamento): <gate> aprovado`, com a linha de atribuição exigida pelo ambiente.
+
+Com a espera pedida, nada de commit agora. Quando o usuário liberar: `harness.py estado set Proximo "<primeiro passo da camada nova>" && git commit …`, e o commit leva o `STATUS.md`.

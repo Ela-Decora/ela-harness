@@ -135,9 +135,17 @@ def formatar_esqueleto(mudancas: list[Mudancas]) -> str:
     return "".join(linha + "\n" for linha in saida)
 
 
-def base(raiz: Path, relativo: str, desde_marcada: bool, executar) -> str | None:
+def base(
+    raiz: Path, relativo: str, desde_marcada: bool, executar, desde_revisada: bool = False
+) -> str | None:
     """O texto do documento no HEAD, ou None se ele não está lá; com `desde_marcada`, o da cópia marcada, e sem a cópia
-    lança ResumoRecusado."""
+    lança ResumoRecusado; com `desde_revisada`, o da última entrada revisada do histórico (a de ajuste fica de fora), e
+    sem ela lança ResumoRecusado."""
+    if desde_revisada:
+        entrada = versao.ultima_revisada(raiz, relativo)
+        if entrada is None:
+            raise ResumoRecusado(f"nenhuma versão revisada no histórico de {relativo}")
+        return comum.ler_texto(entrada.caminho)
     if desde_marcada:
         copia = raiz / comum.PASTA_APROVACAO / versao.nome_da_copia(relativo)
         if not copia.is_file():
@@ -158,9 +166,9 @@ def _camada(perfil: Perfil, relativo: str) -> int:
 
 
 def esqueleto(
-    raiz: Path, perfil: Perfil, desde_marcada: bool = False, executar=subprocess.run
+    raiz: Path, perfil: Perfil, desde_marcada: bool = False, executar=subprocess.run, desde_revisada: bool = False
 ) -> tuple[list[Mudancas], list[str]]:
-    """As mudanças dos documentos em refino contra o HEAD (ou a cópia marcada) e os caminhos dos diffs gravados, um por
+    """As mudanças dos documentos em refino contra o HEAD (ou a cópia marcada, ou a última versão revisada) e os caminhos dos diffs gravados, um por
     camada com mudança, em `diff-camada-<N>.diff` na pasta do dossiê; prepara a pasta do resumo escrito. Sem documento
     em refino, lança ResumoRecusado."""
     dados = estado.ler(raiz / perfil.caminhos.status, perfil)
@@ -171,7 +179,7 @@ def esqueleto(
     diffs: dict[int, list[str]] = {}
     for relativo in documentos:
         novo = comum.ler_texto(raiz / relativo)
-        antigo = base(raiz, relativo, desde_marcada, executar)
+        antigo = base(raiz, relativo, desde_marcada, executar, desde_revisada)
         achadas = comparar(Path(relativo).name, antigo, novo, perfil)
         if achadas is None:
             continue

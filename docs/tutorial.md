@@ -84,8 +84,8 @@ tem no máximo duas rodadas. Na skill, é o passo 5 do ciclo.
 
 O modelo marca a versão e mostra a mensagem de aprovação: as seções, os `[A CONFIRMAR]` e o veredito da revisão. Leia
 o arquivo e responda `aprovado` no chat, ou diga o que mudar; a ferramenta de opções nunca pede aprovação. A aprovação
-vale só para este documento, não para o próximo nem para o gate da camada. Um pedido de mudança refaz a checagem e a
-revisão, e você vê a saída do `harness.py versao diff` antes da mensagem nova. Na skill, é o passo 6 do ciclo.
+vale só para este documento, não para o próximo nem para o gate da camada. Um ajuste pequeno fica no passo 6, sem
+revisor (`revisar de novo` o chama); a correção volta ao passo 3, e você vê o resumo antes da mensagem nova. Na skill, é o passo 6.
 
 ## 10. O commit
 

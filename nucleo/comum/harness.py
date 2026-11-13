@@ -62,6 +62,7 @@ def _do_planejamento(nome: str) -> types.ModuleType | None:
         raise
 
 
+ajuste = _do_planejamento("ajuste")
 ambiente = _do_planejamento("ambiente")
 blocos = _do_planejamento("blocos")
 dossie = _do_planejamento("dossie")
@@ -176,13 +177,17 @@ def _comando_estado_set(args: argparse.Namespace) -> int:
     """Muda um campo do STATUS.md. Recusado imprime o motivo, numa linha, e sai com 1; o arquivo fica intacto.
 
     `Versao-aprovacao` não muda por aqui: só por `versao marcar`, `versao limpar`, `passo 6` ou `fechar`. O `Lote`
-    também não: só por `estado lote`, `migrar` ou `fechar`.
+    também não: só por `estado lote`, `migrar` ou `fechar`. O `Ajuste`, só por `ajuste`, `passo`, `versao limpar` ou
+    `fechar`.
     """
     if args.campo == "Versao-aprovacao":
         print("recusado: Versao-aprovacao muda só por versao marcar, versao limpar, passo 6 ou fechar")
         return 1
     if args.campo == estado.CAMPO_LOTE:
         print("recusado: Lote muda só por estado lote, migrar ou fechar")
+        return 1
+    if args.campo == estado.CAMPO_AJUSTE:
+        print("recusado: Ajuste muda só por ajuste, passo, versao limpar ou fechar")
         return 1
     raiz, perfil = _projeto()
     try:
@@ -430,7 +435,7 @@ def _comando_versao_resumo(args: argparse.Namespace) -> int:
     cada camada para o revisor. Recusa imprime o motivo e sai com 1."""
     raiz, perfil = _projeto()
     try:
-        mudancas, diffs = resumo.esqueleto(raiz, perfil, args.desde_marcada)
+        mudancas, diffs = resumo.esqueleto(raiz, perfil, args.desde_marcada, desde_revisada=args.desde_revisada)
     except resumo.ResumoRecusado as erro:
         print("recusado: " + _uma_linha(erro.mensagem))
         return 1
@@ -446,7 +451,8 @@ def _comando_versao_resumo(args: argparse.Namespace) -> int:
         print(mensagem)
         return 0 if conferido else 1
     if not mudancas:
-        print("nenhuma mudança contra " + ("a versão marcada" if args.desde_marcada else "o HEAD"))
+        contra = "a versão revisada" if args.desde_revisada else "a versão marcada" if args.desde_marcada else "o HEAD"
+        print("nenhuma mudança contra " + contra)
         return 0
     sys.stdout.write(resumo.formatar_esqueleto(mudancas) + resumo.formatar_diffs(diffs))
     return 0
@@ -517,6 +523,21 @@ def _comando_passo(args: argparse.Namespace) -> int:
         de, para = migrar.migracao_da_origem(estado.origem_do_lote(
             estado.ler(raiz / perfil.caminhos.status, perfil)[estado.CAMPO_LOTE]))
         print(f"decisões: {migrar.ORIGEM.format(de=de, para=para)} registrada em {gravado.decisao}")
+    return 0
+
+
+def _comando_ajuste(args: argparse.Namespace) -> int:
+    """Abre o ajuste no passo 6. Imprime `Ajuste = aberto; Proximo = ...`; recusa sai com 1, sem gravar."""
+    raiz, perfil = _projeto()
+    try:
+        gravado = ajuste.abrir(raiz, perfil, args.proximo) if args.proximo else ajuste.abrir(raiz, perfil)
+    except ajuste.AjusteRecusado as erro:
+        for linha in (erro.mensagem, *erro.detalhes):
+            print("recusado: " + _uma_linha(linha))
+        return 1
+    except (estado.EstadoInvalido, OSError) as erro:
+        return _recusar_versao(erro)
+    print("; ".join(f"{campo} = {valor}" for campo, valor in gravado.items()))
     return 0
 
 
@@ -1802,6 +1823,13 @@ def _montar_parser(trilha: str = perfil_comum.PLANEJAMENTO) -> argparse.Argument
     )
     p_migrar.set_defaults(funcao=_comando_migrar)
 
+    p_ajuste = subcomandos.add_parser(
+        "ajuste", help="abre o ajuste no passo 6: libera a edição do documento sem voltar ao passo 3",
+        description=ajuste.AJUDA,
+    )
+    p_ajuste.add_argument("--proximo", help="o que vem a seguir, numa linha; sem ele, o texto padrão do ajuste")
+    p_ajuste.set_defaults(funcao=_comando_ajuste)
+
     p_molde = subcomandos.add_parser(
         "molde", help="imprime o molde de um documento de planejamento", description=checar.AJUDA_MOLDE
     )
@@ -1843,8 +1871,13 @@ def _montar_parser(trilha: str = perfil_comum.PLANEJAMENTO) -> argparse.Argument
     p_resumo = _nova_acao(
         acoes_versao, "resumo", "dá o esqueleto das mudanças contra o HEAD e grava o diff de cada camada"
     )
-    p_resumo.add_argument(
+    base_do_resumo = p_resumo.add_mutually_exclusive_group()
+    base_do_resumo.add_argument(
         "--desde-marcada", action="store_true", help="compara com a cópia marcada, não com o HEAD"
+    )
+    base_do_resumo.add_argument(
+        "--desde-revisada", action="store_true",
+        help="compara com a última versão revisada do histórico, sem contar os ajustes",
     )
     p_resumo.add_argument(
         "--conferir", metavar="<arquivo>", help="confere as linhas Onde: do resumo escrito contra as seções que mudaram"

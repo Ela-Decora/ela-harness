@@ -57,6 +57,7 @@ Gerado por `harness.py referencia --gravar`. Não edite este arquivo: mude a `AJ
 | [`registrar`](#registrar) | acrescenta no ato um Ruling, uma pendência, uma nota, um relato ou um registro do passo 7 |
 | [`passo`](#passo) | fecha um passo do ciclo: grava o STATUS.md e o status do artefato |
 | [`migrar`](#migrar) | migra os documentos aprovados para a forma da versão do plugin e abre o lote de migração |
+| [`ajuste`](#ajuste) | abre o ajuste no passo 6: libera a edição do documento sem voltar ao passo 3 |
 | [`molde`](#molde) | imprime o molde de um documento de planejamento |
 | [`der`](#der) | gera e confere o DDL e o diagrama do DER físico |
 | [`versao`](#versao) | marca, confere e limpa a versão enviada para aprovação |
@@ -89,7 +90,7 @@ Valida e imprime o STATUS.md, o estado curto do planejamento (`caminhos.status`)
 Sem ação, imprime o arquivo em texto canônico e sai com 0; espaço no fim da linha, linha em branco e quebra de linha
 do Windows passam. Arquivo inválido sai com 1 e `STATUS.md inválido: <erro>; <erro>`. O formato é o título fixo e um
 campo por linha, nesta ordem, em até 2.000 caracteres; os gates do perfil ficam numa linha só, na ordem das fases, e o
-`Pacote` e o `Lote`, opcionais, vêm logo depois do `Documento`, nessa ordem. Um projeto novo começa assim:
+`Pacote`, o `Lote` e o `Ajuste`, opcionais, vêm logo depois do `Documento`, nessa ordem. Um projeto novo começa assim:
 
 ```text
 # Status do planejamento
@@ -112,6 +113,7 @@ com cada mudança automática numa linha a mais. Recusa sai com 1 e `recusado: <
 | `Documento` | `nenhum`, ou um `.md` dentro da pasta do planejamento, com caminho normalizado e sem espaço |
 | `Pacote` | de 2 a 6 caminhos como o do `Documento`, separados por um espaço, sem repetição; `—` tira a linha |
 | `Lote` | `<prefixo de pendência>-NN (<N> documentos)` ou `migração v<de>→v<para> (<N> documentos)`, com `(1 documento)` no singular; só pelo `estado lote`, pelo `migrar` e pelo `fechar` |
+| `Ajuste` | `aberto`; só pelo `ajuste`, pelo `passo`, pelo `versao limpar` e pelo `fechar`; o `Documento` novo o tira |
 | `Passo` | inteiro de 0 a 7 |
 | `Rodada` | inteiro maior ou igual a 0 |
 | `Proximo` | uma linha, até 200 caracteres |
@@ -456,13 +458,19 @@ Monta o dossiê de cada documento, as fontes dele achadas por script, num arquiv
 Sem argumento, usa os documentos em refino do STATUS.md, o `Pacote` ou o `Documento`. Grava
 `.claude/harness/dossie/<nome do primeiro documento>.md`, refeito a cada execução; a mesma entrada dá o mesmo
 arquivo. O resumo tem até 20 linhas: o arquivo, uma linha por documento com as contagens (com `Rulings novos` e
-`prováveis alvos`, no documento com o item 7) e os itens do gate, os IDs sem cobertura e os avisos. Com `--verbose`,
-imprime o arquivo inteiro. Para cada documento, o dossiê junta:
+`prováveis alvos`, no documento com o item 7) e os itens do gate, o bloco do pacote do módulo, os IDs sem cobertura e
+os avisos. Com `--verbose`, imprime o arquivo inteiro. Para cada documento, o dossiê junta:
 
 1. o contrato: o molde e os títulos de nível 1 a 3 dele;
 2. as linhas dos documentos aprovados que linkam o documento ou citam o nome do arquivo dele;
 3. os IDs citados nessas linhas, com a linha da definição;
-4. os links que o documento faz para outros documentos do planejamento, com o status de cada destino;
+4. os links que o documento faz para outros documentos do planejamento, com o status de cada destino, e, no módulo
+   (o documento que casa o `por` de um item `ligados` do gate da fase dele), o bloco `### Pacote do módulo (<N>)`,
+   também no resumo: uma linha `- <caminho>` por derivado, na ordem dos links, ou
+   `- nenhum: os rascunhos linkados são de outro módulo` (também quando todos estão em refino ou aprovados). Os derivados são os documentos da fase no disco, não
+   aprovados na tabela, que casam os `documentos` desse item e que o módulo linka fora das exclusões, as mesmas do
+   `harness.py proximo`: a seção de nível 2 com "outros módulos" no título, a lista aberta por uma linha que não é
+   item e diz "outros módulos" ou "só lê", e a linha com a anotação `(módulo <nome>)` de outro módulo;
 5. os termos do documento (o do título de nível 1 e o do nome do arquivo), procurados sem acento: as linhas do
    arquivo de decisões (os Rulings primeiro), das pendências abertas e do rascunho; nos `.md` e `.txt` dos relatórios
    de pesquisa (só as subpastas `pesquisa-*` de `caminhos.pesquisas`) e das fontes (`caminhos.fontes`), cada arquivo
@@ -710,6 +718,11 @@ Efeito além do STATUS.md, nos documentos em refino (o `Pacote`, ou o `Documento
 - passo 7: status `aprovado`, com a data de hoje, só se o `versao conferir` der OK e houver mensagem do usuário
   depois da última marcação (a `resposta` que a guarda grava).
 
+Com o `Ajuste` aberto (o `ajuste`), o passo 6 compara cada documento em refino com a última versão revisada no
+histórico: seção de nível 2 ou 3 nova ou removida, ou ID definido que entrou ou saiu, é recusa. Sem nada disso, marca
+como de ajuste (a entrada do histórico com `-ajuste`) e tira o `Ajuste` na mesma escrita. O passo 7 recusa com o
+`Ajuste` aberto, e os passos de 0 a 5 o tiram.
+
 No lote de migração (`Lote: migração v<de>→v<para>`, aberto pelo `migrar`), os passos 5 e 7 não mexem na tabela de
 artefatos: os documentos seguem `aprovado`, com a data de antes. O passo 7 grava, no lugar, a linha
 `- <data> migração v<de>→v<para>: <N> documentos` na seção de aprovações do arquivo de decisões (o `registrar
@@ -727,6 +740,10 @@ usuário que valeu como aprovação, `prova: mensagem das <hora>: «<trecho>»`;
 Recusas, com 1 e nada gravado, depois de `recusado: `: `com Documento nenhum, só o passo 0 é aceito`;
 `a versão em aprovação não confere; nada foi gravado`, seguida da saída do `versao conferir`;
 `nenhuma mensagem do usuário depois da última marcação (<hash>); apresente a versão e espere a resposta`;
+`ajuste aberto; marque de novo com harness.py passo 6`;
+`o ajuste mudou a estrutura desde a versão revisada; é volta de correção: rode harness.py passo 3`, seguida de uma
+linha por mudança, `<documento>: seção nova «<título>»`, `<documento>: seção removida «<título>»`,
+`<documento>: ID novo <ID>` ou `<documento>: ID removido <ID>`;
 `STATUS.md inválido: <motivo>`, `backlog ilegível: <motivo>`, `backlog sem a tabela de artefatos (...)`, as do
 `estado set` e, no passo 6, as do `versao marcar`, como `arquivo não existe: <documento>`; no passo 7 do lote de
 migração, as do `registrar aprovacao`, como a falta da seção de aprovações.
@@ -771,6 +788,34 @@ Recusas, com 1 e nada gravado, depois de `recusado: `: `ciclo aberto (<Documento
 `--de v<versão> é posterior à versão do plugin, v<versão>`; `<documento> tem mudança fora do commit; faça o commit
 antes` (`<a>, <b> têm ...` com mais de um); `git indisponível: <motivo>`; `STATUS.md inválido: <motivo>`,
 `backlog ilegível: <motivo>`, e as do `estado` e do `registrar aprovacao`.
+
+## ajuste
+
+abre o ajuste no passo 6: libera a edição do documento sem voltar ao passo 3
+
+`harness.py ajuste [--proximo <proximo>]`
+
+| Argumento ou opção | Obrigatório | O que é |
+|---|---|---|
+| `--proximo <proximo>` | não | o que vem a seguir, numa linha; sem ele, o texto padrão do ajuste |
+
+Abre o ajuste: no passo 6, libera a edição do documento em refino sem voltar ao passo 3.
+
+Só no planejamento, no passo 6, com a versão marcada (`Versao-aprovacao` com hash) e, para cada documento em refino,
+uma versão revisada no histórico: a última entrada que não é de ajuste. O pedido de um ajuste cabe nas edições que
+não mudam a estrutura do documento; a estrutura nova volta ao passo 3.
+
+Grava `Ajuste: aberto` no STATUS.md, logo depois do `Documento` (ou do `Pacote` ou do `Lote`), e o `Proximo`: o
+`--proximo`, ou `ajuste: edite, rode harness.py checar e marque de novo com harness.py passo 6`. Com o campo aberto,
+a guarda libera a edição dos documentos no passo 6; o passo 7 não a libera. Abrir de novo grava o mesmo. O campo sai
+quando o passo 6 marca a versão de novo, num passo de 0 a 5, no `fechar`, num `Documento` novo e no
+`versao limpar`.
+
+Saída, com 0: `Ajuste = aberto; Proximo = <texto>`.
+
+Recusas, com 1 e nada gravado, depois de `recusado: `: `o ajuste só vale no passo 6`,
+`nenhuma versão marcada; rode harness.py passo 6` e, uma linha por documento,
+`nenhuma versão revisada no histórico de <documento>; o pedido volta ao passo 3`.
 
 ## molde
 
@@ -870,13 +915,14 @@ Marca, confere e limpa a versão do documento, ou do pacote, enviada para aprova
   `cópia restaurada do commit <commit>`, ou, sem achá-la, dá a linha
   `versão marcada ausente da cópia e dos últimos 50 commits do arquivo`; com o mesmo hash, ou sem o git, avisa
   `cópia ausente, comparado só o hash`.
-- `limpar`: volta o campo para `—` e apaga as cópias, o manifesto, a `resposta` e o histórico; a lista do lote fica.
+- `limpar`: volta o campo para `—`, tira o `Ajuste` do STATUS.md e apaga as cópias, o manifesto, a `resposta` e o histórico; a lista do lote fica.
 - `resumo`: o esqueleto das mudanças dos documentos em refino contra o HEAD, por documento e seção (`alterada (+a −r)`,
   `nova`, `removida`) e os IDs que entraram, saíram ou mudaram; o documento fora do HEAD é `novo`. Grava o diff de cada
   camada com mudança em `.claude/harness/dossie/diff-camada-<N>.diff` e cria a pasta `.harness-aprovacao/`, com um
   `.gitignore` de `*`, para o resumo escrito em `.harness-aprovacao/resumo.md`, fora do `.claude/`, onde o Claude Code
   pede permissão a cada escrita. `--desde-marcada` compara com a cópia marcada e,
-  sem ela, recusa. Sem mudança: `nenhuma mudança contra o HEAD`, ou `contra a versão marcada`. Com
+  sem ela, recusa; `--desde-revisada` (exclusiva com a anterior), com a última versão revisada do histórico, sem
+  contar as de ajuste, e sem versão revisada recusa. Sem mudança: `nenhuma mudança contra o HEAD`, ou `contra a versão marcada` ou `contra a versão revisada`. Com
   `--conferir <arquivo>`, confere as linhas `Onde: <documento> · <seção>` do resumo escrito contra as seções que
   mudaram: `OK: <M> mudanças cobrem as <N> seções alteradas`, ou `FALTA:` e `SOBRA:`, e sai com 1.
 - `ver <documento> [n]`: a `n`-ésima seção alterada do documento em refino (padrão 1; `--desde-marcada` como no
@@ -893,7 +939,11 @@ Marca, confere e limpa a versão do documento, ou do pacote, enviada para aprova
 ```text
 01  <AAAA-MM-DD HH:MM>  sha256:<12 hexadecimais>
 02  <AAAA-MM-DD HH:MM>  sha256:<12 hexadecimais>  +4 -1
+03  <AAAA-MM-DD HH:MM>  sha256:<12 hexadecimais>  +1 -0  ajuste
 ```
+
+A coluna `ajuste` marca a versão que o `passo 6` gravou durante um ajuste, sem revisor. Se o arquivo não muda e a
+marcação seguinte é revisada, a entrada de ajuste perde o rótulo.
 
 Com `Pacote` ou `Lote` no STATUS.md, o `marcar` não aceita caminho e marca o pacote ou o lote: a cópia de cada
 documento e o manifesto, uma linha `<hash> <caminho>` por documento, na ordem do `Pacote` ou da lista do lote; o hash
@@ -910,7 +960,8 @@ divergência é `DIVERGE: pacote mudou desde a marcação (<atual> != <marcado>)
 harness.py passo 6`.
 
 Pasta das cópias, `.claude/harness/aprovacao/`, fora do git: a cópia (`<caminho com / trocado por __>`), o manifesto
-(`pacote`), o histórico (`historico/<nome da cópia>/NN-<AAAA-MM-DD>T<HHMM>-<12 hexadecimais>.md`) e a `resposta`.
+(`pacote`), o histórico (`historico/<nome da cópia>/NN-<AAAA-MM-DD>T<HHMM>-<12 hexadecimais>.md`, com `-ajuste` antes
+do `.md` na entrada de ajuste) e a `resposta`.
 A lista do lote (`lote`) é de outro comando e o `limpar` a deixa. A `resposta` é a linha `<hash marcado> <AAAA-MM-DDTHH:MM:SS> <trecho>`, que a guarda grava a cada mensagem do usuário
 com `Passo` 6 e versão marcada, com os 80 primeiros caracteres dela. O `passo 7` recusa sem ela ou com o hash de outra
 marcação: ela prova que houve mensagem depois da marcação, não que a mensagem aprova.
@@ -952,11 +1003,12 @@ desfaz a marcação e apaga a cópia e o histórico
 
 dá o esqueleto das mudanças contra o HEAD e grava o diff de cada camada
 
-`harness.py versao resumo [--desde-marcada] [--conferir <arquivo>]`
+`harness.py versao resumo [--desde-marcada | --desde-revisada] [--conferir <arquivo>]`
 
 | Argumento ou opção | Obrigatório | O que é |
 |---|---|---|
 | `--desde-marcada` | não | compara com a cópia marcada, não com o HEAD |
+| `--desde-revisada` | não | compara com a última versão revisada do histórico, sem contar os ajustes |
 | `--conferir <arquivo>` | não | confere as linhas Onde: do resumo escrito contra as seções que mudaram |
 
 ### versao ver
@@ -1537,7 +1589,7 @@ Diz o próximo passo do planejamento, pelo STATUS.md, pela tabela de artefatos, 
 Só lê; a rede só para o retorno, e o hook nunca consulta. A ação recomendada é a primeira que existir, nesta ordem:
 
 1. consertar: no passo 7 com a versão marcada já no HEAD, `harness.py fechar`; nos passos 6 e 7 com o documento
-   mudado desde a marcação, `harness.py versao conferir`; o documento em refino ausente do disco; o documento ou o
+   mudado desde a marcação, `harness.py versao conferir`, que não vale no passo 6 com o `Ajuste` aberto; o documento em refino ausente do disco; o documento ou o
    pacote ou o lote do STATUS, nos passos 0 a 6, todo `aprovado` na tabela e sem pendência aberta que o cite:
    `perguntar ao usuário se o STATUS está velho`, com a volta no motivo; o lote de migração, que mantém os documentos
    `aprovado`, não entra nesse caso. Com o `Lote` no STATUS e a lista dele ausente, ilegível ou fora da conta,
@@ -1546,14 +1598,15 @@ Só lê; a rede só para o retorno, e o hook nunca consulta. A ação recomendad
    `(na árvore principal)`.
 2. o documento, o pacote ou o lote em andamento: `/ela-harness:refinar-documento <documento>`, que retoma do passo
    atual, ou, no passo 7, o commit e o `harness.py fechar`; com "quando o usuário liberar" no `Proximo`, perguntar se o
-   usuário libera o commit.
+   usuário libera o commit; sem documento em refino e com "quando o usuário liberar" no `Proximo` (o commit do gate),
+   perguntar se o usuário libera o que o `Proximo` diz, e a fila da fase segue abaixo.
 3. a fila da fase, sem nada aberto: `/ela-harness:gerar-modulos`, quando o gate da fase tem item `ligados`, nenhum
    documento da fase, no disco ou em refino, casa o `por` dele e todo obrigatório da fase existe e está aprovado, com
    o motivo `nenhum <padrões do por, juntados por " ou "> na fase`; os módulos em rascunho (os documentos que casam com o `por` de um item `ligados`
-   do gate); os módulos aprovados com documentos linkados em rascunho; os outros rascunhos; os obrigatórios ausentes
-   ou em rascunho; os documentos novos que as pendências abertas com o marcador do gate pedem; os aprovados citados
-   por pendência aberta com o marcador do gate; as pendências com o marcador que nenhum item da fila resolve; por
-   último, `/ela-harness:gate-fase <gate>`.
+   do gate); os módulos aprovados com derivados em rascunho; os outros rascunhos, com `; nenhum módulo o compõe`
+   no que casa os `documentos` de um item `ligados`; os obrigatórios ausentes ou em rascunho; os documentos novos
+   que as pendências abertas com o marcador do gate pedem; os aprovados citados por pendência aberta com o marcador
+   do gate; as pendências com o marcador que nenhum item da fila resolve; por último, `/ela-harness:gate-fase <gate>`.
    O documento novo sai do destino da pendência, sem os trechos `antes do`: o caminho com pasta (a partir da raiz, ou
    da pasta do planejamento quando começa pelo id de uma fase) dentro da pasta de uma fase e sem arquivo no disco; o
    nome sem pasta de nenhum `.md` do planejamento, de nenhum arquivo da raiz e de nenhum caminho de estado do perfil,
@@ -1565,8 +1618,16 @@ Só lê; a rede só para o retorno, e o hook nunca consulta. A ação recomendad
    resolve, nem pelos IDs nem pelo nome, no destino, de um documento da fila, de um derivado em rascunho de um
    módulo da fila ou do documento em refino, vira `resolver <ID> com o usuário`, com o motivo
    `nenhum documento da fila a resolve: <destino>`.
-   A revisão de um aprovado citado por pendência com `antes do <arquivo>.md` entra logo antes do item desse arquivo,
-   se ele está na fila como módulo, rascunho, obrigatório ou documento novo; com mais de um arquivo
+   Os derivados de um módulo, os mesmos do bloco "Pacote do módulo" do `harness.py dossie`, menos os documentos em
+   refino (com algo em refino, o `proximo` recomenda o andamento), são os documentos da
+   fase, não aprovados, que casam os `documentos` de um item `ligados` cujo `por` casa o módulo e que o módulo linka
+   fora das exclusões: a seção de nível 2 com "outros módulos" no título; a lista aberta por uma linha que não é item
+   e diz "outros módulos" ou "só lê", com essa linha; e a linha com a anotação `(módulo <nome>)` cujo nome, sem
+   acento, em minúsculas e com hífens no lugar dos espaços, não está no nome do arquivo do módulo. Um link fora das
+   exclusões basta.
+   A revisão de um aprovado citado por pendência com `antes do <arquivo>.md` (o arquivo pode vir como link Markdown,
+   `[rótulo](caminho.md)`) entra logo antes do item desse arquivo, se ele está na fila como módulo, rascunho,
+   obrigatório ou documento novo, ou logo antes do item do módulo de que ele é derivado; com mais de um arquivo
    (`antes do a.md e do b.md`), antes do primeiro deles na fila; senão, vai junto das revisões do marcador. Nenhum
    arquivo depois de um `antes do` conta como citado. A pendência cujo destino cita dois ou mais aprovados (fora os
    em refino) vira um item `lote` só, no lugar das revisões desses documentos e na posição da primeira delas, com a
@@ -3163,7 +3224,7 @@ refaz o espelho das fichas no Linear, sem duplicar nada
 | `corretor-tardio` | agente | Fresh-eyes fixer for the late rounds, SDD rounds 4 and 5 and the third fix of a block review. Dispatched when earlier fixes did not settle a finding. Edits files and commits. | — | as da sessão | opus |
 | `executar-bloco` | skill | Executa o plano do bloco da lane pelo subagent-driven-development, com os agentes do harness, até o bloco pronto para revisão. Use só dentro da lane de um bloco em ready_for_execution ou executing, quando o bloco status disser /ela-harness:executar-bloco, ou com pr quando o PR do bloco voltou com pedido de mudança. | `[correção: <orientação> \| pr]` | `harness.py bloco` | o da sessão |
 | `finalizar-bloco` | skill | Finaliza o bloco da lane: confere o que a spec promete, guia os itens manuais e abre o PR pelo harness. Use só dentro da lane de um bloco em ready_for_closure, ou quando o bloco status disser /ela-harness:finalizar-bloco. | `[resumo do PR]` | `harness.py bloco` | o da sessão |
-| `gate-fase` | skill | Fecha uma camada do planejamento: roda o checklist do gate (script e revisor), apresenta o veredito e registra a aprovação dada pelo usuário. | `[gate, como no STATUS.md]` | `harness.py perfil`, `harness.py gate`, `harness.py passagem` | o da sessão |
+| `gate-fase` | skill | Fecha uma camada do planejamento: roda o checklist do gate (script e revisor), apresenta o veredito e registra a aprovação dada pelo usuário. Também libera o commit de um gate que espera. | `[gate, como no STATUS.md]` | `harness.py perfil`, `harness.py gate`, `harness.py passagem` | o da sessão |
 | `gerar-modulos` | skill | Gera em rascunho as entidades, as telas e os módulos da camada a partir do escopo aprovado, com o usuário só nas dúvidas, quando o harness.py proximo a recomenda; cada módulo segue depois para o refinar-documento. | — | `harness.py perfil` | o da sessão |
 | `implementador-integracao` | agente | Implements one plan task that spans several files or needs a pattern decision, and makes the first and second fix of a block review. Dispatched by the SDD loop and by the review loop. Edits files and commits. | — | as da sessão | sonnet |
 | `implementador-mecanico` | agente | Implements one plan task whose code is already written in the plan, in one or two files. Dispatched by the SDD loop for mechanical tasks. Edits files and commits. | — | as da sessão | sonnet |
@@ -3217,11 +3278,13 @@ refaz o espelho das fichas no Linear, sem duplicar nada
 | `nucleo/desenvolvimento/revisao.py` | Revisão do bloco (spec 6d-bloco, §7): o gabarito da lente 1 e os comandos `revisao preparar`, `registrar` e `dispensar`. |
 | `nucleo/desenvolvimento/transicoes.py` | Comandos do bloco (spec 6c, §14): cada um confere a transição e o passo, grava o `estado.md`, faz o commit e regrava o `LANES.md`. |
 | `nucleo/desenvolvimento/verificacao.py` | Verificações do perfil (spec 6c, §11.1 e §11.2): os mudados, a seleção pelo momento, a execução com tempo limite e a marca da última aprovada. |
+| `nucleo/planejamento/ajuste.py` | O comando `ajuste`: abre o ajuste no passo 6, para editar o documento sem voltar ao passo 3. |
 | `nucleo/planejamento/anotacao.py` | Via curta do UserPromptSubmit do planejamento (spec da onda 1, §5.1): grava a resposta da aprovação sem carregar o harness.py. |
 | `nucleo/planejamento/backlog.py` | Backlog do planejamento: IDs e contagem das pendências (spec 5.2 e 6.4), pendências e artefatos do gate (spec 2a, §6.1). |
 | `nucleo/planejamento/blocos.py` | Textos tirados do perfil: o resumo do comando `perfil` e o bloco "Este projeto" de cada skill (spec 2a, §5.3 e §5.5). |
 | `nucleo/planejamento/checar.py` | Checagem determinística de um documento de planejamento contra o molde: o passo 4 do ciclo (spec 6.2). |
 | `nucleo/planejamento/citacoes.py` | As verificações das citações de um documento da camada: a citação por número de linha e o item de Aceite que mudou. |
+| `nucleo/planejamento/composicao.py` | A composição do pacote de um módulo (spec "Menos voltas", §6.1): os rascunhos que ele compõe, pelos links fora dos de outro módulo. |
 | `nucleo/planejamento/der.py` | O DER físico em tabelas Markdown, o gerador do DDL e do erDiagram, o rastreio contra a camada 2 e o manifesto do Workbench. |
 | `nucleo/planejamento/diagramas.py` | As checagens dos diagramas da camada, em Mermaid, C4 e `.drawio`, sem rodar o Mermaid. |
 | `nucleo/planejamento/dossie.py` | Dossiê de um documento ou de um pacote (spec 4b, §7): as fontes de cada documento, achadas por script, sem LLM e sem rede. |

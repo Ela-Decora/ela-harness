@@ -184,7 +184,8 @@ def fechar(
     _indice_so_com_o_status(raiz, perfil, executar)
 
     fechados = {campo: valor for campo, valor in dados.items() if campo not in estado.CAMPOS_OPCIONAIS}
-    fechados.update({"Documento": estado.SEM_DOCUMENTO, "Passo": "0", "Rodada": "0", versao.CAMPO: versao.SEM_VERSAO})
+    fechados.update({"Documento": estado.SEM_DOCUMENTO, "Passo": "0", "Rodada": "0", versao.CAMPO: versao.SEM_VERSAO,
+                    "Proximo": ""})
     if proximo_texto is None:
         proximo_texto = proximo.calcular(raiz, perfil, dados=fechados, executar=executar).linha_curta
     mudancas = {

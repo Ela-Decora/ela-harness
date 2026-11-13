@@ -10,6 +10,7 @@ import datetime
 from dataclasses import dataclass
 from pathlib import Path
 
+import ajuste
 import backlog
 import comum
 import estado
@@ -31,6 +32,11 @@ Efeito além do STATUS.md, nos documentos em refino (o `Pacote`, ou o `Documento
 - passo 7: status `aprovado`, com a data de hoje, só se o `versao conferir` der OK e houver mensagem do usuário
   depois da última marcação (a `resposta` que a guarda grava).
 
+Com o `Ajuste` aberto (o `ajuste`), o passo 6 compara cada documento em refino com a última versão revisada no
+histórico: seção de nível 2 ou 3 nova ou removida, ou ID definido que entrou ou saiu, é recusa. Sem nada disso, marca
+como de ajuste (a entrada do histórico com `-ajuste`) e tira o `Ajuste` na mesma escrita. O passo 7 recusa com o
+`Ajuste` aberto, e os passos de 0 a 5 o tiram.
+
 No lote de migração (`Lote: migração v<de>→v<para>`, aberto pelo `migrar`), os passos 5 e 7 não mexem na tabela de
 artefatos: os documentos seguem `aprovado`, com a data de antes. O passo 7 grava, no lugar, a linha
 `- <data> migração v<de>→v<para>: <N> documentos` na seção de aprovações do arquivo de decisões (o `registrar
@@ -48,6 +54,10 @@ usuário que valeu como aprovação, `prova: mensagem das <hora>: «<trecho>»`;
 Recusas, com 1 e nada gravado, depois de `recusado: `: `com Documento nenhum, só o passo 0 é aceito`;
 `a versão em aprovação não confere; nada foi gravado`, seguida da saída do `versao conferir`;
 `nenhuma mensagem do usuário depois da última marcação (<hash>); apresente a versão e espere a resposta`;
+`ajuste aberto; marque de novo com harness.py passo 6`;
+`o ajuste mudou a estrutura desde a versão revisada; é volta de correção: rode harness.py passo 3`, seguida de uma
+linha por mudança, `<documento>: seção nova «<título>»`, `<documento>: seção removida «<título>»`,
+`<documento>: ID novo <ID>` ou `<documento>: ID removido <ID>`;
 `STATUS.md inválido: <motivo>`, `backlog ilegível: <motivo>`, `backlog sem a tabela de artefatos (...)`, as do
 `estado set` e, no passo 6, as do `versao marcar`, como `arquivo não existe: <documento>`; no passo 7 do lote de
 migração, as do `registrar aprovacao`, como a falta da seção de aprovações.
@@ -106,9 +116,11 @@ def fechar(
 ) -> Gravado:
     """Grava `Passo`, `Rodada`, `Proximo` e `Atualizado` numa escrita só e, nos passos 5 e 7, o artefato no backlog.
 
-    Passo 6: marca a versão do documento, ou do pacote, antes. Passo 7: só com o `versao conferir` dando OK para
-    cada documento e com a `resposta` do usuário anotada depois da última marcação (spec 3b, §7.1). Com pacote, os
-    passos 5 e 7 gravam o artefato de cada documento (spec 4b, §6.2). Recusa lança PassoRecusado, sem nada gravado.
+    Passo 6: marca a versão do documento, ou do pacote, antes; com o `Ajuste` aberto, só sem mudança de estrutura
+    desde a versão revisada, e a marcação é de ajuste. Passo 7: recusado com o `Ajuste` aberto, e só com o `versao
+    conferir` dando OK para cada documento e com a `resposta` do usuário anotada depois da última marcação (spec 3b,
+    §7.1). Os passos de 0 a 6 tiram o `Ajuste`. Com pacote, os passos 5 e 7 gravam o artefato de cada documento (spec
+    4b, §6.2). Recusa lança PassoRecusado, sem nada gravado.
     """
     if hoje is None:
         hoje = datetime.date.today().isoformat()
@@ -123,8 +135,13 @@ def fechar(
     mudancas = {"Passo": str(numero), "Rodada": str(rodada), "Proximo": proximo}
     if documento == "nenhum" and numero != 0:
         raise PassoRecusado("com Documento nenhum, só o passo 0 é aceito")
+    com_ajuste = estado.CAMPO_AJUSTE in dados
+    if com_ajuste and numero == 7:
+        raise PassoRecusado("ajuste aberto; marque de novo com harness.py passo 6")
+    # Fora do passo 7, o `Ajuste` sai: o passo 6 marca a versão do ajuste, e os outros são voltas.
+    escrita = {**mudancas, estado.CAMPO_AJUSTE: estado.SEM_PACOTE} if com_ajuste else mudancas
     try:
-        estado.preparar(status, mudancas, perfil, hoje)
+        estado.preparar(status, escrita, perfil, hoje)
     except estado.EstadoInvalido as erro:
         raise PassoRecusado(erro.mensagem) from None
     try:
@@ -155,8 +172,14 @@ def fechar(
             raise PassoRecusado(erro.mensagem, tuple(erro.detalhes)) from None
     campos: dict[str, str] = {}
     if numero == 6:
+        estrutura = ajuste.estrutura_mudada(raiz, perfil, em_refino) if com_ajuste else []
+        if estrutura:
+            raise PassoRecusado(
+                "o ajuste mudou a estrutura desde a versão revisada; é volta de correção: rode harness.py passo 3",
+                tuple(estrutura),
+            )
         try:
-            campos[versao.CAMPO] = versao.marcar(raiz, None, perfil)
+            campos[versao.CAMPO] = versao.marcar(raiz, None, perfil, ajuste=com_ajuste)
         except (versao.VersaoInvalida, estado.EstadoInvalido) as erro:
             raise PassoRecusado(erro.mensagem) from None
     campos.update(mudancas)
@@ -164,7 +187,7 @@ def fechar(
     if textos is not None:
         comum.escrever_texto(caminho_backlog, textos[1])
     try:
-        estado.definir_varios(status, mudancas, perfil, hoje)
+        estado.definir_varios(status, escrita, perfil, hoje)
     except estado.EstadoInvalido as erro:
         if textos is not None:
             comum.escrever_texto(caminho_backlog, textos[0])

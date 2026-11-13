@@ -6,8 +6,8 @@ documentos do item `ligados`, quando a fase não tem nenhum; módulos, derivados
 rascunhos, obrigatórios, documentos novos que as pendências com o marcador do gate pedem, revisões com o marcador do
 gate, pendências com o marcador que nenhum item da fila resolve e o gate). Só lê: não grava nada, e a mesma entrada
 dá a mesma saída; a rede só para o retorno, que o hook nunca consulta. A ordem da fila sai das chaves que o perfil
-já tem (os itens `ligados` do gate da fase, os `obrigatorios` da fase e o gate); o `proximo` não compõe pacote. Só
-o comando, com o gate recomendado, roda os itens de script dele, só lendo, e mostra os FAIL.
+já tem (os itens `ligados` do gate da fase, os `obrigatorios` da fase e o gate); os derivados de cada módulo vêm
+do `composicao`. Só o comando, com o gate recomendado, roda os itens de script dele, só lendo, e mostra os FAIL.
 """
 from __future__ import annotations
 
@@ -20,8 +20,8 @@ from pathlib import Path
 
 import ambiente
 import backlog
-import checar
 import comum
+import composicao
 import estado
 import estudos
 import gate
@@ -39,7 +39,7 @@ Diz o próximo passo do planejamento, pelo STATUS.md, pela tabela de artefatos, 
 Só lê; a rede só para o retorno, e o hook nunca consulta. A ação recomendada é a primeira que existir, nesta ordem:
 
 1. consertar: no passo 7 com a versão marcada já no HEAD, `harness.py fechar`; nos passos 6 e 7 com o documento
-   mudado desde a marcação, `harness.py versao conferir`; o documento em refino ausente do disco; o documento ou o
+   mudado desde a marcação, `harness.py versao conferir`, que não vale no passo 6 com o `Ajuste` aberto; o documento em refino ausente do disco; o documento ou o
    pacote ou o lote do STATUS, nos passos 0 a 6, todo `aprovado` na tabela e sem pendência aberta que o cite:
    `perguntar ao usuário se o STATUS está velho`, com a volta no motivo; o lote de migração, que mantém os documentos
    `aprovado`, não entra nesse caso. Com o `Lote` no STATUS e a lista dele ausente, ilegível ou fora da conta,
@@ -48,14 +48,15 @@ Só lê; a rede só para o retorno, e o hook nunca consulta. A ação recomendad
    `(na árvore principal)`.
 2. o documento, o pacote ou o lote em andamento: `/ela-harness:refinar-documento <documento>`, que retoma do passo
    atual, ou, no passo 7, o commit e o `harness.py fechar`; com "quando o usuário liberar" no `Proximo`, perguntar se o
-   usuário libera o commit.
+   usuário libera o commit; sem documento em refino e com "quando o usuário liberar" no `Proximo` (o commit do gate),
+   perguntar se o usuário libera o que o `Proximo` diz, e a fila da fase segue abaixo.
 3. a fila da fase, sem nada aberto: `/ela-harness:gerar-modulos`, quando o gate da fase tem item `ligados`, nenhum
    documento da fase, no disco ou em refino, casa o `por` dele e todo obrigatório da fase existe e está aprovado, com
    o motivo `nenhum <padrões do por, juntados por " ou "> na fase`; os módulos em rascunho (os documentos que casam com o `por` de um item `ligados`
-   do gate); os módulos aprovados com documentos linkados em rascunho; os outros rascunhos; os obrigatórios ausentes
-   ou em rascunho; os documentos novos que as pendências abertas com o marcador do gate pedem; os aprovados citados
-   por pendência aberta com o marcador do gate; as pendências com o marcador que nenhum item da fila resolve; por
-   último, `/ela-harness:gate-fase <gate>`.
+   do gate); os módulos aprovados com derivados em rascunho; os outros rascunhos, com `; nenhum módulo o compõe`
+   no que casa os `documentos` de um item `ligados`; os obrigatórios ausentes ou em rascunho; os documentos novos
+   que as pendências abertas com o marcador do gate pedem; os aprovados citados por pendência aberta com o marcador
+   do gate; as pendências com o marcador que nenhum item da fila resolve; por último, `/ela-harness:gate-fase <gate>`.
    O documento novo sai do destino da pendência, sem os trechos `antes do`: o caminho com pasta (a partir da raiz, ou
    da pasta do planejamento quando começa pelo id de uma fase) dentro da pasta de uma fase e sem arquivo no disco; o
    nome sem pasta de nenhum `.md` do planejamento, de nenhum arquivo da raiz e de nenhum caminho de estado do perfil,
@@ -67,8 +68,16 @@ Só lê; a rede só para o retorno, e o hook nunca consulta. A ação recomendad
    resolve, nem pelos IDs nem pelo nome, no destino, de um documento da fila, de um derivado em rascunho de um
    módulo da fila ou do documento em refino, vira `resolver <ID> com o usuário`, com o motivo
    `nenhum documento da fila a resolve: <destino>`.
-   A revisão de um aprovado citado por pendência com `antes do <arquivo>.md` entra logo antes do item desse arquivo,
-   se ele está na fila como módulo, rascunho, obrigatório ou documento novo; com mais de um arquivo
+   Os derivados de um módulo, os mesmos do bloco "Pacote do módulo" do `harness.py dossie`, menos os documentos em
+   refino (com algo em refino, o `proximo` recomenda o andamento), são os documentos da
+   fase, não aprovados, que casam os `documentos` de um item `ligados` cujo `por` casa o módulo e que o módulo linka
+   fora das exclusões: a seção de nível 2 com "outros módulos" no título; a lista aberta por uma linha que não é item
+   e diz "outros módulos" ou "só lê", com essa linha; e a linha com a anotação `(módulo <nome>)` cujo nome, sem
+   acento, em minúsculas e com hífens no lugar dos espaços, não está no nome do arquivo do módulo. Um link fora das
+   exclusões basta.
+   A revisão de um aprovado citado por pendência com `antes do <arquivo>.md` (o arquivo pode vir como link Markdown,
+   `[rótulo](caminho.md)`) entra logo antes do item desse arquivo, se ele está na fila como módulo, rascunho,
+   obrigatório ou documento novo, ou logo antes do item do módulo de que ele é derivado; com mais de um arquivo
    (`antes do a.md e do b.md`), antes do primeiro deles na fila; senão, vai junto das revisões do marcador. Nenhum
    arquivo depois de um `antes do` conta como citado. A pendência cujo destino cita dois ou mais aprovados (fora os
    em refino) vira um item `lote` só, no lugar das revisões desses documentos e na posição da primeira delas, com a
@@ -248,7 +257,8 @@ def _consertar(f: _Fontes, dados: dict[str, str], em_refino: list[str], executar
             return Item(CONSERTAR, "harness.py fechar",
                         f"passo 7 {alvo} com {marcado} no HEAD {head.commit}; fecha sem pedir autorização", em_refino[0])
     no_disco = [(f.raiz / documento).is_file() for documento in em_refino]
-    if passo in (6, 7) and marcado != versao.SEM_VERSAO and em_refino and all(no_disco):
+    ajuste_aberto = passo == 6 and estado.CAMPO_AJUSTE in dados
+    if passo in (6, 7) and marcado != versao.SEM_VERSAO and em_refino and all(no_disco) and not ajuste_aberto:
         try:
             atual = versao.hash_da_versao([(documento, (f.raiz / documento).read_bytes()) for documento in em_refino],
                                           versao.em_grupo(dados))
@@ -455,13 +465,8 @@ def _fila(f: _Fontes, dados: dict[str, str], em_refino: list[str], marcador: str
     derivados: dict[str, list[str]] = {}
     for modulo in modulos:
         texto = rastreio.ler_ou_none(f.raiz / modulo)
-        links = checar.destinos_de_links(texto, modulo) if texto is not None else set()
-        derivados[modulo] = [
-            documento for documento in da_fase
-            if documento != modulo and documento in links and not f.aprovado(documento)
-            and any(casa(item.parametros["por"], modulo) and casa(item.parametros["documentos"], documento)
-                    for item in ligados)
-        ]
+        derivados[modulo] = (composicao.derivados(perfil, modulo, texto, da_fase, f.aprovado)
+                             if texto is not None else [])
     linkados = {documento for lista in derivados.values() for documento in lista}
     obrigatorios = [f"{pasta}/{obrigatorio}" for obrigatorio in fase.obrigatorios]
 
@@ -495,7 +500,7 @@ def _fila(f: _Fontes, dados: dict[str, str], em_refino: list[str], marcador: str
             continue
         motivo = "em rascunho"
         if any(casa(item.parametros["documentos"], documento) for item in ligados):
-            motivo += "; nenhum módulo o linka"
+            motivo += "; nenhum módulo o compõe"
         fila.append(Item(RASCUNHO, _REFINAR + documento, motivo, documento))
     for caminho in obrigatorios:
         if caminho in em_refino:
@@ -524,8 +529,13 @@ def _fila(f: _Fontes, dados: dict[str, str], em_refino: list[str], marcador: str
             if id_ in com_antes:
                 for arquivo, rotulo in antes_do_arquivo(destino)[0]:
                     rotulos.setdefault(arquivo, rotulo)
-        posicao = next((indice for indice, item in enumerate(fila)
-                        if item.categoria in _A_ESCREVER and posixpath.basename(item.documento) in rotulos), None)
+        def no_alvo(item: Item) -> bool:
+            if item.categoria in _A_ESCREVER and posixpath.basename(item.documento) in rotulos:
+                return True
+            return (item.categoria in (MODULO, DERIVADOS)
+                    and any(posixpath.basename(derivado) in rotulos for derivado in derivados.get(item.documento, ())))
+
+        posicao = next((indice for indice, item in enumerate(fila) if no_alvo(item)), None)
         if posicao is not None:
             return Item(REVISAO_ANTES, _REFINAR + documento,
                         f"revisão: {comum.juntar(ids)} ({comum.juntar(rotulos.values())})",
@@ -730,6 +740,11 @@ def calcular(
                            recomendado.documento, recomendado.pendencias)
     if recomendado is None and em_refino:
         recomendado = _andamento(dados, em_refino)
+    if recomendado is None and _ESPERA in dados["Proximo"]:
+        vem = fila[0].acao if fila else "<o que vem>"
+        recomendado = Item(ANDAMENTO, f"perguntar ao usuário se libera o {dados['Proximo'].split(' ' + _ESPERA)[0]}",
+                           "o usuário pediu para esperar o commit; liberado: "
+                           f'harness.py estado set Proximo "{vem}" e o commit')
     if recomendado is None:
         recomendado, fila = fila[0], fila[1:]
     atencao = _atencao(f, texto_backlog is None, amb)

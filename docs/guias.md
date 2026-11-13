@@ -10,10 +10,10 @@ modelo segue [`skills/refinar-documento/SKILL.md`](../skills/refinar-documento/S
 
 1. Chame `/ela-harness:refinar-documento <caminho>`. Sem argumento, a skill retoma do `Passo` gravado o documento ou o pacote do
    `STATUS.md`, numa sessão nova inclusive; sem nenhum, pergunta se abre o recomendado.
-2. Após três rodadas com decisões ainda abertas, o modelo lista o que resta e oferece escrevê-lo com `[A CONFIRMAR]`.
-3. Para escrever sem a pesquisa, diga "sem pesquisa" ao aviso do despacho, ou escolha "Escrever com a seção marcada" no
-   passo 3: a seção sai com `[A CONFIRMAR: pesquisa pendente]`, e a mensagem de aprovação a cita.
-4. No passo 6, responda `aprovado` ou o que mudar: a mudança refaz a checagem e a revisão e mostra o `versao diff`.
+2. Após três rodadas com decisões abertas, o modelo lista o que resta e oferece escrever com `[A CONFIRMAR]`.
+3. Para escrever sem a pesquisa, diga "sem pesquisa" ao aviso ou escolha "Escrever com a seção marcada": sai `[A CONFIRMAR: pesquisa pendente]`, e a aprovação a cita.
+4. No passo 6, responda `aprovado` ou o que mudar. Um ajuste fica no 6, sem revisor: responda `revisar de novo` para chamá-lo.
+   Uma correção volta ao 3, com revisor só no diff e 1 rodada; assunto novo sobe pela escada de pendências.
 
 **Se der errado:**
 - `Versao-aprovacao ... está marcada para <documento>`: no passo 7, sai o commit; no 6, aprove ou autorize o `versao limpar`.
@@ -247,7 +247,7 @@ ou um termo do texto. As chaves e as regras estão em [perfil](referencia.md#per
    `core.hooksPath` e roda o `gerar`. O que já havia fica (`mantido:`); o `settings.json` recebe o que falta (`mesclado:`).
 3. Ajuste o `.claude/perfil.toml`: pastas, fases, gates, padrões de ID e checklists ([Mudar o perfil](#mudar-o-perfil)).
 4. No `CLAUDE.md`, em menos de 100 linhas, escreva o mapa do produto, as decisões fixas e as regras de escrita, e mantenha
-   a linha `@.claude/harness/gerado/planejamento.md`, do texto do ciclo; num que já existia, o `mantido:` diz o que falta.
+   a linha `@.claude/harness/gerado/planejamento.md`, do texto do ciclo; num que já existia, veja o `mantido:`.
 5. Escreva a ideia em `planejamento/rascunho.md`.
 6. Confira com `harness.py ambiente`, `perfil`, `estado`, `backlog ids` e `proximo`, e abra uma sessão nova.
 
@@ -259,7 +259,7 @@ ou um termo do texto. As chaves e as regras estão em [perfil](referencia.md#per
 
 **Quando:** há diagramas Mermaid no planejamento ou, com `[der]` no perfil, o DDL. Na raiz, copie o workflow do plugin e commite:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Ela-Decora/ela-harness/v0.4.1/ci/planejamento/diagramas.yml -o .github/workflows/diagramas.yml
+curl -fsSL https://raw.githubusercontent.com/Ela-Decora/ela-harness/v0.4.2/ci/planejamento/diagramas.yml -o .github/workflows/diagramas.yml
 ```
 O check `diagramas` valida o Mermaid de `caminhos.planejamento` e, com `[der]`, o DDL num MySQL e num Postgres, pela `ref`
 do `.claude/settings.json`. O `harness.py gerar` reescreve o `harness.yml` inteiro: o CI a mais vai em workflow próprio.
@@ -272,7 +272,7 @@ vez por projeto, numa branch com PR ou, no planejamento sem PR, no ramo de traba
 1. Na raiz, troque o marketplace; os `install` devolvem os plugins que o `remove` tira, o último só no desenvolvimento:
    ```bash
    claude plugin marketplace remove ela-harness --scope project
-   claude plugin marketplace add Ela-Decora/ela-harness#v0.4.1 --scope project
+   claude plugin marketplace add Ela-Decora/ela-harness#v0.4.2 --scope project
    claude plugin install ela-harness@ela-harness --scope project
    claude plugin install ela-harness-papeis@ela-harness --scope project
    ```

@@ -34,13 +34,14 @@ Marca, confere e limpa a versão do documento, ou do pacote, enviada para aprova
   `cópia restaurada do commit <commit>`, ou, sem achá-la, dá a linha
   `versão marcada ausente da cópia e dos últimos 50 commits do arquivo`; com o mesmo hash, ou sem o git, avisa
   `cópia ausente, comparado só o hash`.
-- `limpar`: volta o campo para `—` e apaga as cópias, o manifesto, a `resposta` e o histórico; a lista do lote fica.
+- `limpar`: volta o campo para `—`, tira o `Ajuste` do STATUS.md e apaga as cópias, o manifesto, a `resposta` e o histórico; a lista do lote fica.
 - `resumo`: o esqueleto das mudanças dos documentos em refino contra o HEAD, por documento e seção (`alterada (+a −r)`,
   `nova`, `removida`) e os IDs que entraram, saíram ou mudaram; o documento fora do HEAD é `novo`. Grava o diff de cada
   camada com mudança em `.claude/harness/dossie/diff-camada-<N>.diff` e cria a pasta `.harness-aprovacao/`, com um
   `.gitignore` de `*`, para o resumo escrito em `.harness-aprovacao/resumo.md`, fora do `.claude/`, onde o Claude Code
   pede permissão a cada escrita. `--desde-marcada` compara com a cópia marcada e,
-  sem ela, recusa. Sem mudança: `nenhuma mudança contra o HEAD`, ou `contra a versão marcada`. Com
+  sem ela, recusa; `--desde-revisada` (exclusiva com a anterior), com a última versão revisada do histórico, sem
+  contar as de ajuste, e sem versão revisada recusa. Sem mudança: `nenhuma mudança contra o HEAD`, ou `contra a versão marcada` ou `contra a versão revisada`. Com
   `--conferir <arquivo>`, confere as linhas `Onde: <documento> · <seção>` do resumo escrito contra as seções que
   mudaram: `OK: <M> mudanças cobrem as <N> seções alteradas`, ou `FALTA:` e `SOBRA:`, e sai com 1.
 - `ver <documento> [n]`: a `n`-ésima seção alterada do documento em refino (padrão 1; `--desde-marcada` como no
@@ -57,7 +58,11 @@ Marca, confere e limpa a versão do documento, ou do pacote, enviada para aprova
 ```text
 01  <AAAA-MM-DD HH:MM>  sha256:<12 hexadecimais>
 02  <AAAA-MM-DD HH:MM>  sha256:<12 hexadecimais>  +4 -1
+03  <AAAA-MM-DD HH:MM>  sha256:<12 hexadecimais>  +1 -0  ajuste
 ```
+
+A coluna `ajuste` marca a versão que o `passo 6` gravou durante um ajuste, sem revisor. Se o arquivo não muda e a
+marcação seguinte é revisada, a entrada de ajuste perde o rótulo.
 
 Com `Pacote` ou `Lote` no STATUS.md, o `marcar` não aceita caminho e marca o pacote ou o lote: a cópia de cada
 documento e o manifesto, uma linha `<hash> <caminho>` por documento, na ordem do `Pacote` ou da lista do lote; o hash
@@ -74,7 +79,8 @@ divergência é `DIVERGE: pacote mudou desde a marcação (<atual> != <marcado>)
 harness.py passo 6`.
 
 Pasta das cópias, `.claude/harness/aprovacao/`, fora do git: a cópia (`<caminho com / trocado por __>`), o manifesto
-(`pacote`), o histórico (`historico/<nome da cópia>/NN-<AAAA-MM-DD>T<HHMM>-<12 hexadecimais>.md`) e a `resposta`.
+(`pacote`), o histórico (`historico/<nome da cópia>/NN-<AAAA-MM-DD>T<HHMM>-<12 hexadecimais>.md`, com `-ajuste` antes
+do `.md` na entrada de ajuste) e a `resposta`.
 A lista do lote (`lote`) é de outro comando e o `limpar` a deixa. A `resposta` é a linha `<hash marcado> <AAAA-MM-DDTHH:MM:SS> <trecho>`, que a guarda grava a cada mensagem do usuário
 com `Passo` 6 e versão marcada, com os 80 primeiros caracteres dela. O `passo 7` recusa sem ela ou com o hash de outra
 marcação: ela prova que houve mensagem depois da marcação, não que a mensagem aprova.
@@ -98,12 +104,13 @@ ARQUIVO_PACOTE = "pacote"
 LIMITE_DIFF_HISTORICO = 60
 
 _PREFIXO_HASH = "sha256:"
+SUFIXO_AJUSTE = "-ajuste"
 _TAMANHO_HASH = 12
 _AVISO_SEM_COPIA = "cópia ausente, comparado só o hash"
 _COMMITS_PROCURADOS = 50
 _TEMPO_LIMITE_GIT = 5
 _SEM_VERSAO_NO_GIT = f"versão marcada ausente da cópia e dos últimos {_COMMITS_PROCURADOS} commits do arquivo"
-_RE_ENTRADA = re.compile(r"^(\d{2,})-(\d{4}-\d{2}-\d{2})T(\d{2})(\d{2})-([0-9a-f]{12})\.md$")
+_RE_ENTRADA = re.compile(r"^(\d{2,})-(\d{4}-\d{2}-\d{2})T(\d{2})(\d{2})-([0-9a-f]{12})(-ajuste)?\.md$")
 _RE_LINHA_DO_MANIFESTO = re.compile(r"(sha256:[0-9a-f]{12}) (\S+)")
 _MARQUE_DE_NOVO = "marque de novo com harness.py passo 6"
 _AVISO_SEM_MANIFESTO = "manifesto ausente, comparado só o hash"
@@ -163,6 +170,7 @@ class Entrada:
     data_hora: str
     hash: str
     caminho: Path
+    ajuste: bool = False
 
 
 def nome_da_copia(documento_relativo: str) -> str:
@@ -192,9 +200,11 @@ def _diff(copia: Path, arquivo: Path) -> list[str]:
     return linhas
 
 
-def nome_da_entrada(numero: int, agora: datetime.datetime, hash_marcado: str) -> str:
-    """`NN-AAAA-MM-DDTHHMM-<12 hex>.md`, com mais dígitos no número a partir de 100 e sem `:`, por causa do Windows."""
-    return f"{numero:02d}-{agora:%Y-%m-%dT%H%M}-{hash_marcado[len(_PREFIXO_HASH):]}.md"
+def nome_da_entrada(numero: int, agora: datetime.datetime, hash_marcado: str, ajuste: bool = False) -> str:
+    """`NN-AAAA-MM-DDTHHMM-<12 hex>.md`, com `-ajuste` antes do `.md` na marcação de ajuste, mais dígitos no número a
+    partir de 100 e sem `:`, por causa do Windows."""
+    sufixo = SUFIXO_AJUSTE if ajuste else ""
+    return f"{numero:02d}-{agora:%Y-%m-%dT%H%M}-{hash_marcado[len(_PREFIXO_HASH):]}{sufixo}.md"
 
 
 def _pasta_do_historico(raiz: Path, relativo: str) -> Path:
@@ -209,20 +219,38 @@ def _entradas(pasta: Path) -> list[Entrada]:
     for arquivo in pasta.iterdir():
         achado = _RE_ENTRADA.match(arquivo.name)
         if achado and arquivo.is_file():
-            numero, data, hora, minuto, digitos = achado.groups()
-            entradas.append(Entrada(int(numero), f"{data} {hora}:{minuto}", _PREFIXO_HASH + digitos, arquivo))
+            numero, data, hora, minuto, digitos, sufixo = achado.groups()
+            entradas.append(
+                Entrada(int(numero), f"{data} {hora}:{minuto}", _PREFIXO_HASH + digitos, arquivo, sufixo is not None)
+            )
     return sorted(entradas, key=lambda entrada: entrada.numero)
 
 
-def _acrescentar_ao_historico(raiz: Path, relativo: str, copia: Path, marcado: str, agora: datetime.datetime) -> None:
-    """Copia a versão marcada para o histórico, a menos que a última entrada tenha o mesmo hash."""
+def ultima_revisada(raiz: Path, relativo: str) -> Entrada | None:
+    """A última entrada do histórico do documento que não é de ajuste; None sem histórico ou só com ajustes."""
+    revisadas = [entrada for entrada in _entradas(_pasta_do_historico(raiz, relativo)) if not entrada.ajuste]
+    return revisadas[-1] if revisadas else None
+
+
+def _acrescentar_ao_historico(
+    raiz: Path, relativo: str, copia: Path, marcado: str, agora: datetime.datetime, ajuste: bool = False
+) -> None:
+    """Copia a versão marcada para o histórico, a menos que a última entrada tenha o mesmo hash. Nesse caso, uma
+    última entrada de ajuste ganha o nome sem o sufixo quando a marcação é revisada: o ajuste foi revisado."""
     pasta = _pasta_do_historico(raiz, relativo)
     entradas = _entradas(pasta)
     if entradas and entradas[-1].hash == marcado:
+        ultima = entradas[-1]
+        if ultima.ajuste and not ajuste:
+            ultima.caminho.rename(pasta / nome_da_entrada(ultima.numero, _hora_da_entrada(ultima), marcado))
         return
     pasta.mkdir(parents=True, exist_ok=True)
     numero = entradas[-1].numero + 1 if entradas else 1
-    shutil.copyfile(copia, pasta / nome_da_entrada(numero, agora, marcado))
+    shutil.copyfile(copia, pasta / nome_da_entrada(numero, agora, marcado, ajuste))
+
+
+def _hora_da_entrada(entrada: Entrada) -> datetime.datetime:
+    return datetime.datetime.strptime(entrada.data_hora, "%Y-%m-%d %H:%M")
 
 
 RECUSA_MARCAR_NENHUM = "Documento: nenhum no STATUS.md; abra o documento com harness.py estado set Documento <caminho>"
@@ -308,11 +336,14 @@ def em_grupo(dados: dict[str, str]) -> bool:
     return estado.CAMPO_PACOTE in dados or estado.CAMPO_LOTE in dados
 
 
-def _marcar_pacote(raiz: Path, perfil: Perfil, dados: dict[str, str], agora: datetime.datetime | None) -> str:
+def _marcar_pacote(
+    raiz: Path, perfil: Perfil, dados: dict[str, str], agora: datetime.datetime | None, ajuste: bool = False
+) -> str:
     """Copia cada documento do pacote, grava o manifesto e o hash dele em `Versao-aprovacao`; devolve o hash.
 
     Documento ausente lança VersaoInvalida antes de gravar. Se o STATUS.md recusar o hash, as cópias e o manifesto
-    recém-gravados são removidos. Com o hash gravado, cada documento entra no próprio histórico."""
+    recém-gravados são removidos. Com o hash gravado, cada documento entra no próprio histórico, com o rótulo de
+    ajuste quando `ajuste`."""
     relativos = estado.documentos(dados, raiz)
     faltando = next((relativo for relativo in relativos if not (raiz / relativo).is_file()), None)
     if faltando is not None:
@@ -338,11 +369,13 @@ def _marcar_pacote(raiz: Path, perfil: Perfil, dados: dict[str, str], agora: dat
         raise
     momento = agora or datetime.datetime.now()
     for relativo, copia, hash_ in copias:
-        _acrescentar_ao_historico(raiz, relativo, copia, hash_, momento)
+        _acrescentar_ao_historico(raiz, relativo, copia, hash_, momento, ajuste)
     return marcado
 
 
-def marcar(raiz: Path, documento: Path | None, perfil: Perfil, agora: datetime.datetime | None = None) -> str:
+def marcar(
+    raiz: Path, documento: Path | None, perfil: Perfil, agora: datetime.datetime | None = None, ajuste: bool = False
+) -> str:
     """Grava a cópia do documento e o hash dela em `Versao-aprovacao`; devolve o hash.
 
     Com `Pacote` ou `Lote` no STATUS.md, marca o grupo inteiro (spec 4b, §9.2) e recusa o caminho. Sem pacote, o documento
@@ -351,7 +384,8 @@ def marcar(raiz: Path, documento: Path | None, perfil: Perfil, agora: datetime.d
     raiz ou se o arquivo não existe, e EstadoInvalido se o STATUS.md não
     serve. Nesses casos nada é gravado. Se o STATUS.md recusar o hash, a cópia recém-gravada é removida. A
     `resposta` da marcação anterior é apagada antes de gravar o hash. Com o hash gravado, a versão entra no histórico
-    com a hora `agora` (padrão: a hora local), a menos que seja igual à última de lá.
+    com a hora `agora` (padrão: a hora local), a menos que seja igual à última de lá; com `ajuste`, a entrada leva o
+    sufixo `-ajuste`, e uma marcação revisada igual à última, que é de ajuste, tira o sufixo dela.
     """
     status = raiz / perfil.caminhos.status
     dados = estado.ler(status, perfil)
@@ -361,7 +395,7 @@ def marcar(raiz: Path, documento: Path | None, perfil: Perfil, agora: datetime.d
             raise VersaoInvalida(
                 f"{rotulo.capitalize()} aberto: versao marcar marca o {rotulo} inteiro; rode sem o caminho"
             )
-        return _marcar_pacote(raiz, perfil, dados, agora)
+        return _marcar_pacote(raiz, perfil, dados, agora, ajuste)
     if dados["Documento"] == estado.SEM_DOCUMENTO:
         raise VersaoInvalida(RECUSA_MARCAR_NENHUM)
     relativo = _relativo(raiz, documento if documento is not None else _documento_do_status(dados))
@@ -385,7 +419,7 @@ def marcar(raiz: Path, documento: Path | None, perfil: Perfil, agora: datetime.d
     except estado.EstadoInvalido:
         copia.unlink()
         raise
-    _acrescentar_ao_historico(raiz, relativo, copia, marcado, agora or datetime.datetime.now())
+    _acrescentar_ao_historico(raiz, relativo, copia, marcado, agora or datetime.datetime.now(), ajuste)
     return marcado
 
 
@@ -597,7 +631,7 @@ def _contagem(anterior: Entrada, atual: Entrada) -> tuple[int, int]:
 
 def formatar_historico(relativo: str, entradas: list[Entrada]) -> str:
     """Uma linha por versão, `NN  AAAA-MM-DD HH:MM  sha256:<12>`, e da segunda em diante `  +<a> -<r>` contra a
-    anterior. Sem entradas, `sem versões marcadas para <documento>`."""
+    anterior, e `  ajuste` no fim da entrada de ajuste. Sem entradas, `sem versões marcadas para <documento>`."""
     if not entradas:
         return f"sem versões marcadas para {relativo}\n"
     linhas = []
@@ -606,6 +640,8 @@ def formatar_historico(relativo: str, entradas: list[Entrada]) -> str:
         if posicao > 0:
             acrescentadas, tiradas = _contagem(entradas[posicao - 1], entrada)
             linha += f"  +{acrescentadas} -{tiradas}"
+        if entrada.ajuste:
+            linha += "  ajuste"
         linhas.append(linha)
     return "".join(linha + "\n" for linha in linhas)
 
@@ -648,14 +684,14 @@ def diff_do_historico(
 
 
 def limpar(raiz: Path, perfil: Perfil) -> None:
-    """Volta `Versao-aprovacao` para `—` e apaga todas as cópias de `PASTA_APROVACAO`, a `resposta` e o histórico.
+    """Volta `Versao-aprovacao` para `—`, tira o `Ajuste` e apaga todas as cópias de `PASTA_APROVACAO`, a `resposta` e o histórico.
 
     Só um documento fica marcado por vez; cópia de outro documento é sobra e sai junto. Sem cópias, só o
     campo volta. Lança EstadoInvalido se o STATUS.md não serve.
     """
     status = raiz / perfil.caminhos.status
     estado.ler(status, perfil)
-    estado.definir(status, CAMPO, SEM_VERSAO, perfil)
+    estado.definir_varios(status, {CAMPO: SEM_VERSAO, estado.CAMPO_AJUSTE: SEM_VERSAO}, perfil)
     apagar_copias(raiz)
 
 

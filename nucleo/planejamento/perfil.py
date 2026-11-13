@@ -146,7 +146,7 @@ DIALETOS = ("mysql", "postgres")
 CAMPOS_DO_NUCLEO = ("Fase", "Documento", "Passo", "Rodada", "Proximo", "Versao-aprovacao", "Atualizado")
 
 # Campos opcionais do STATUS.md (spec 4b, §9.1), presos por teste a estado.CAMPOS_OPCIONAIS; também não servem de gate.
-CAMPOS_OPCIONAIS_DO_NUCLEO = ("Pacote", "Lote")
+CAMPOS_OPCIONAIS_DO_NUCLEO = ("Pacote", "Lote", "Ajuste")
 
 _RE_NOME_DE_GATE = re.compile(r"[A-Za-z][A-Za-z0-9-]*")
 _RE_ID_DE_FASE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
