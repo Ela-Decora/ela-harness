@@ -259,7 +259,7 @@ ou um termo do texto. As chaves e as regras estão em [perfil](referencia.md#per
 
 **Quando:** há diagramas Mermaid no planejamento ou, com `[der]` no perfil, o DDL. Na raiz, copie o workflow do plugin e commite:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Ela-Decora/ela-harness/v0.4.2/ci/planejamento/diagramas.yml -o .github/workflows/diagramas.yml
+curl -fsSL https://raw.githubusercontent.com/Ela-Decora/ela-harness/v0.4.3/ci/planejamento/diagramas.yml -o .github/workflows/diagramas.yml
 ```
 O check `diagramas` valida o Mermaid de `caminhos.planejamento` e, com `[der]`, o DDL num MySQL e num Postgres, pela `ref`
 do `.claude/settings.json`. O `harness.py gerar` reescreve o `harness.yml` inteiro: o CI a mais vai em workflow próprio.
@@ -272,7 +272,7 @@ vez por projeto, numa branch com PR ou, no planejamento sem PR, no ramo de traba
 1. Na raiz, troque o marketplace; os `install` devolvem os plugins que o `remove` tira, o último só no desenvolvimento:
    ```bash
    claude plugin marketplace remove ela-harness --scope project
-   claude plugin marketplace add Ela-Decora/ela-harness#v0.4.2 --scope project
+   claude plugin marketplace add Ela-Decora/ela-harness#v0.4.3 --scope project
    claude plugin install ela-harness@ela-harness --scope project
    claude plugin install ela-harness-papeis@ela-harness --scope project
    ```

@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.4.3 — 2026-11-17
+
+O PR do bloco sai com Resumo, Evidência e Perigo do merge, no lugar de uma lista de campos, e a linha dos testes diz quantos rodaram, quando o perfil traz a `contagem` da verificação.
+
+### O que mudou desde a 0.4.2
+
+- O corpo do PR vem de um arquivo: o `harness.py bloco finalizar --corpo <arquivo>` é obrigatório fora da retomada, e o arquivo, lido a partir da raiz da árvore (ou por caminho absoluto), traz `## Resumo`, `## Evidência` e `## Perigo do merge`, nessa ordem; os títulos se contam só fora dos blocos de código. Recusa, com 1 e sem commit, nesta ordem: `bloco finalizar: falta o --corpo <arquivo>; rode o /ela-harness:finalizar-bloco`, `bloco finalizar: <arquivo> não existe` (a pasta conta), `bloco finalizar: <arquivo> não se lê como UTF-8`, `bloco finalizar: o corpo não tem a seção ## <título>`, `bloco finalizar: o corpo tem a seção ## <título>, fora do molde`, `bloco finalizar: as seções do corpo estão fora da ordem Resumo, Evidência e Perigo do merge`, `bloco finalizar: a seção ## <título> está vazia`, `bloco finalizar: o corpo tem texto antes do ## Resumo` e `bloco finalizar: o corpo já tem ### <título>; o núcleo o acrescenta`. O núcleo acrescenta, no fim da `## Evidência`, o `### Aceitação` (a tabela do `aceitacao.md`, ou `Sem verificação externa.`) e o `### Verificações` (um `- <linha>` por linha do `verificar`), e o `## Objetivo` do corpo de antes sai. O texto é normalizado como o `git commit` faz: o `\r\n` vira `\n`, as linhas perdem os espaços do fim, as linhas em branco seguidas viram uma e as do começo e do fim saem; o corpo do commit `closing` e o do PR saem iguais. O commit com corpo passa `--cleanup=whitespace`, e o `commit.cleanup=strip` do usuário não tira mais do corpo as linhas que começam com `#`. A ajuda do `finalizar` nomeia os passos que falham depois do commit: `git push`, `gh pr create` e `gh pr edit`.
+- O PR da branch já aberto tem o corpo trocado: com o PR aberto, o `finalizar` roda o `gh pr edit <n> --body <corpo>`, com 30 s, e a linha é `PR #<n> já aberto, corpo atualizado: <url>`, no lugar de `PR #<n> já aberto: <url>`. A falha dá `closing gravado, mas gh pr edit falhou: <motivo>; rode harness.py bloco finalizar de novo`, com saída 1. Na retomada, a troca vale também para a lane que já estava em `closing` desde a 0.4.2: o corpo é o do último commit `chore(<ID>): closing`.
+- A `/ela-harness:finalizar-bloco` escreve o corpo pelo `references/corpo.md`, o molde das três seções (Resumo com um esboço escolhido entre pseudocódigo, árvore de chamadas, árvore de arquivos, `diff` de forma e Mermaid; Evidência com o antes e o depois de cada teste novo, tirados dos relatórios do SDD do bloco; Perigo do merge com a porta, de uma via ou de duas, e o raio de impacto), e o grava pelo Write em `.superpowers/pr/<ID>.md`, com o `.superpowers/pr/.gitignore` (`*`). Roda o `harness.py bloco finalizar --corpo .superpowers/pr/<ID>.md`. A retomada, em `closing` e depois de `closing gravado, mas <passo> falhou`, roda o `finalizar` sem o `--corpo`, sempre; depois de uma correção pedida no PR, o bloco volta a `ready_for_closure` e o corpo se escreve de novo.
+- A `contagem`, chave opcional de cada `[[desenvolvimento.verificacoes]]`, é uma expressão regular, com `re.MULTILINE`, que o `verificar` procura na saída inteira; vale a última ocorrência. Com grupos nomeados, a linha traz `<valor> <nome>` de cada um com valor não vazio, na ordem da expressão; sem grupo nomeado, o grupo 1 ou, sem grupo, o trecho inteiro; os espaços seguidos viram um. A verificação que passa imprime `<nome>: <texto> (<s> s)`, ou `<nome>: ok (<s> s); a contagem não casou com a saída` quando a expressão não casa ou casa só vazio, o que não é falha; a falha, a que passou do tempo, a pulada e a sem tempo não mudam. Recusas do perfil, depois de `perfil inválido: `: `desenvolvimento.verificacoes.<n>.contagem deve ser um texto não vazio` e `desenvolvimento.verificacoes.<n>.contagem não é uma expressão regular válida: <motivo do re>`. Para um executor que imprime `2904 passed, 2 skipped`, a linha é `testes: 2904 ok, 2 pulados (37,1 s)`:
+
+  ```toml
+  [[desenvolvimento.verificacoes]]
+  nome = "testes"
+  comando = "pytest -q"
+  caminhos = []
+  momentos = ["stop", "finalizar"]
+  contagem = '(?P<ok>\d+) passed(?:, (?P<pulados>\d+) skipped)?'
+  ```
+
+- Os avisos de terceiros: o `THIRD-PARTY-NOTICES.md` ganha, no mattpocock/skills, a `pr` (o molde do corpo do PR), e o humanlayer/skills, MIT, com a `show-me`, de onde a `pr` tirou o cardápio de visões do Resumo; o `references/corpo.md` leva o aviso e as duas licenças no próprio texto.
+
+Sem passo de migração obrigatório: os arquivos gerados nos projetos não mudam, e a `contagem` é opcional. Quem rodava o `harness.py bloco finalizar` à mão, fora da retomada, passa a ser recusado sem o `--corpo`: escreva o corpo pelo molde, ou use a `/ela-harness:finalizar-bloco`.
+
 ## v0.4.2 — 2026-11-12
 
 Um pedido pequeno na aprovação não reabre mais o ciclo inteiro: o ajuste fica no passo 6, sem revisor, e o núcleo trava só a mudança de estrutura. Junto vêm o tratamento do relatório de pesquisa que chega atrasado, o pacote do módulo calculado pelo núcleo e a espera do commit do gate guardada no STATUS.md.

@@ -19,7 +19,7 @@ Argumento: `$ARGUMENTS`. Nos comandos, `harness.py` abrevia `python3 .claude/har
 
 1. **Promessa da spec.** Invoque `superpowers:verification-before-completion` sobre o que a spec do bloco promete, com a saída de `harness.py verificar --momento finalizar` e de `harness.py aceitacao conferir` como evidência. A última linha do `aceitacao conferir` decide o passo seguinte: `ACEITACAO OK`, o passo 3; `ACEITACAO MANUAL`, o passo 2. Com a verificação vermelha, ou com outra última linha (`ACEITACAO PENDENTE` ou uma recusa), não siga: chame o dono (item 4 de Quando chamar o dono).
 2. **Item manual.** Com `ACEITACAO MANUAL`, siga [references/manual.md](references/manual.md), um item por vez, até a última linha do `aceitacao anotar` dar `ACEITACAO OK`; então, o passo 3.
-3. **Finalizar.** Rode `harness.py bloco finalizar`, com `--resumo "<texto>"` quando há argumento, e peça a confirmação da guarda. Recusado, corrija e rode de novo; na segunda recusa pelo mesmo motivo, chame o dono.
+3. **Finalizar.** Escreva o corpo do PR por [references/corpo.md](references/corpo.md) e grave-o pelo Write em `.superpowers/pr/<ID>.md`, com o `.superpowers/pr/.gitignore` (`*`) se ele falta, sem `cp` nem redirecionamento do shell; o arquivo de um `finalizar` anterior é regravado, e o Write recusa o que a sessão não leu: leia-o antes de regravar. Rode `harness.py bloco finalizar --corpo .superpowers/pr/<ID>.md`, com `--resumo "<texto>"` quando há argumento, e peça a confirmação da guarda. Recusado, corrija (a recusa do corpo, no arquivo) e rode de novo; na segunda recusa pelo mesmo motivo, chame o dono.
 4. **Fim.** Termine com o link do PR e estas duas linhas, como estão:
 
 ```
@@ -36,4 +36,4 @@ se o PR voltar com pedido de mudança: /ela-harness:executar-bloco pr
 
 ## Retomada
 
-Numa lane em `ready_for_closure` ou `closing`, rode `harness.py bloco status` e siga do passo 1; o item manual já anotado no `aceitacao.md` não se repete. Com o PR aberto, só repita o passo 4.
+Numa lane em `ready_for_closure`, rode `harness.py bloco status` e siga do passo 1; o item manual já anotado no `aceitacao.md` não se repete. Em `closing`, com ou sem PR aberto, e depois de `closing gravado, mas <passo> falhou`, rode `harness.py bloco finalizar` sem o `--corpo`, sempre: o corpo vem do commit `closing`, e a retomada é idempotente (empurra de novo e troca o corpo do PR ou o abre). Depois siga para o passo 4. Depois de uma correção pedida no PR, o bloco volta a `ready_for_closure` e passa pelo passo 3 inteiro, com o corpo escrito de novo.

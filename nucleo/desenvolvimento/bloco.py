@@ -156,10 +156,11 @@ def commitar(raiz: Path, caminhos: list[str], mensagem: str, do_harness: list[st
     """O commit só com os caminhos que mudaram, que deixa o resto do índice como estava; sem mudança, nada, e False.
 
     Os mudados saem do `git status --porcelain -z --untracked-files=all -- <caminhos>`; o caminho que não existe nem
-    está no índice fica de fora. Vão pelo `git add -A` e pelo `git commit -q -m <mensagem> [-m <corpo>] -- <mudados>`,
-    com TEMPO_DO_COMMIT, que roda o pre-commit. Na falha, os de `do_harness` entre os mudados (entre os `caminhos`, no
-    status que falha) voltam ao último commit, e a recusa é `git commit falhou: <motivo>; <a> voltou ao último
-    commit`, ou `<a> e <b> voltaram`; com uma volta que falha, só a primeira parte.
+    está no índice fica de fora. Vão pelo `git add -A` e pelo `git commit -q [--cleanup=whitespace] -m <mensagem>
+    [-m <corpo>] -- <mudados>`, com TEMPO_DO_COMMIT, que roda o pre-commit; o `--cleanup=whitespace` entra só com
+    corpo, para o `commit.cleanup=strip` do usuário não tirar do corpo as linhas que começam com `#`. Na falha, os de
+    `do_harness` entre os mudados (entre os `caminhos`, no status que falha) voltam ao último commit, e a recusa é
+    `git commit falhou: <motivo>; <a> voltou ao último commit`, ou `<a> e <b> voltaram`; com uma volta que falha, só a primeira parte.
     """
     status = git(raiz, ["status", "--porcelain", "-z", "--untracked-files=all", "--", *caminhos], executar)
     if status.returncode != 0:
@@ -169,7 +170,8 @@ def commitar(raiz: Path, caminhos: list[str], mensagem: str, do_harness: list[st
         return False
     voltam = [caminho for caminho in do_harness if caminho in mudados]
     for argumentos, tempo in ((["add", "-A", "--", *mudados], TEMPO_LIMITE_GIT),
-                              (["commit", "-q", "-m", mensagem, *(["-m", corpo] if corpo else []), "--", *mudados],
+                              (["commit", "-q", *(["--cleanup=whitespace"] if corpo else []), "-m", mensagem,
+                                *(["-m", corpo] if corpo else []), "--", *mudados],
                                TEMPO_DO_COMMIT)):
         feito = git(raiz, argumentos, executar, tempo)
         if feito.returncode != 0:

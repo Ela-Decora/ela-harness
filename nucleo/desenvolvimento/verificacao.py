@@ -66,6 +66,14 @@ grupo inteiro morre, os processos em segundo plano inclusive. As linhas:
 - `<nome>: passou de <t> s`, que conta como falha, seguida das últimas 30 linhas da saída;
 - sem nenhuma a rodar: `nada a verificar`.
 
+A chave opcional `contagem` de cada `[[desenvolvimento.verificacoes]]` é uma expressão regular, com `re.MULTILINE`, que
+o `verificar` procura na saída inteira; vale a última ocorrência. Com grupos nomeados, a linha traz `<valor> <nome>` de
+cada um com valor não vazio, na ordem da expressão; sem grupo nomeado, o grupo 1 ou, sem grupo, o trecho inteiro; os
+espaços seguidos viram um. Com a chave `contagem = '(?P<ok>\\d+) passed(?:, (?P<pulados>\\d+) skipped)?'`, a linha é
+`testes: 2904 ok, 2 pulados (37,1 s)`. Se a expressão não casa, ou casa só com valores vazios, a linha é
+`<nome>: ok (<s> s); a contagem não casou com a saída`, que não é falha. A falha, a que passou do tempo, a pulada e a
+sem tempo não mudam.
+
 Com `GITHUB_ACTIONS=true`, a falha, a que passou do tempo e a de `requer` ganham mais duas coisas:
 
 - logo abaixo da linha da falha, uma linha
@@ -270,6 +278,24 @@ def linhas_da_falha(nome: str, falha: str, saida: str, ultimas: tuple[str, ...],
     return (falha, *falta, *ultimas, anotacao(nome, falta[0] if falta else falha))
 
 
+def texto_da_contagem(expressao: str, saida: str) -> str:
+    """O texto da `contagem` na saída (a última ocorrência da expressão); vazio quando não casou."""
+    achado = None
+    padrao = re.compile(expressao, re.MULTILINE)
+    for achado in padrao.finditer(saida):
+        pass
+    if achado is None:
+        return ""
+    if padrao.groupindex:
+        nomes = sorted(padrao.groupindex.items(), key=lambda item: item[1])
+        texto = ", ".join(f"{achado.group(nome)} {nome}" for nome, _ in nomes if achado.group(nome))
+    elif padrao.groups:
+        texto = achado.group(1) or ""
+    else:
+        texto = achado.group(0)
+    return " ".join(texto.split())
+
+
 def _executar(verificacao: Verificacao, raiz: Path, momento: str, prazo: float | None, relogio, rodar,
               ambiente: Mapping[str, str] = os.environ) -> Execucao:
     nome = verificacao.nome
@@ -296,7 +322,13 @@ def _executar(verificacao: Verificacao, raiz: Path, momento: str, prazo: float |
     if codigo != 0:
         falha = f"{nome}: falhou (saída {codigo})"
         return Execucao(nome, FALHOU, linhas_da_falha(nome, falha, saida, ultimas, ambiente))
-    return Execucao(nome, OK, (f"{nome}: ok ({_segundos(fim - inicio)} s)",))
+    segundos = _segundos(fim - inicio)
+    if verificacao.contagem is None:
+        return Execucao(nome, OK, (f"{nome}: ok ({segundos} s)",))
+    contado = texto_da_contagem(verificacao.contagem, saida)
+    if not contado:
+        return Execucao(nome, OK, (f"{nome}: ok ({segundos} s); a contagem não casou com a saída",))
+    return Execucao(nome, OK, (f"{nome}: {contado} ({segundos} s)",))
 
 
 def verificar(raiz: Path, perfil, momento: str, mudados_: list[str], prazo: float | None = None,

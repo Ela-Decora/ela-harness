@@ -2,8 +2,8 @@
 
 Parte do texto das skills e dos agentes deste plugin, a da `refinar-documento` sobretudo, é adaptada de peças de outros
 projetos: traduzida para o português, reduzida e ajustada aos caminhos e às regras do harness. Abaixo, cada origem, a
-licença e o que entrou. Dois arquivos trazem também o aviso no próprio texto:
-`skills/refinar-documento/references/camada-3.md` e `skills/refinar-documento/references/cheiros-de-ambiguidade.md`.
+licença e o que entrou. Três arquivos trazem também o aviso no próprio texto: `skills/refinar-documento/references/camada-3.md`,
+`skills/refinar-documento/references/cheiros-de-ambiguidade.md` e `skills/finalizar-bloco/references/corpo.md`.
 
 ## Sob a licença MIT
 
@@ -12,7 +12,7 @@ licença e o que entrou. Dois arquivos trazem também o aviso no próprio texto:
 - Origem: <https://github.com/mattpocock/skills>.
 - O que entrou: da `grilling`, a árvore de decisões, a fronteira, as rodadas numeradas e a resposta recomendada; da
   `domain-modeling`, o desafio ao termo com dois nomes e o cenário concreto, e, do `ADR-FORMAT.md`, os critérios e o
-  status das decisões; do `SKILL-MECHANICS.md` e da `writing-for-agents`, as regras de redação das skills.
+  status das decisões; do `SKILL-MECHANICS.md` e da `writing-for-agents`, as regras de redação das skills; da `pr`, o molde do corpo do PR.
 - Copyright (c) 2026 Matt Pocock
 
 ### obra/superpowers
@@ -54,6 +54,12 @@ licença e o que entrou. Dois arquivos trazem também o aviso no próprio texto:
 - O que entrou: da `ambiguity-detection-in-requirements`, a lista de palavras vagas; da
   `requirements-review-checklist`, as oito dimensões da revisão, condensadas.
 - Copyright (c) 2026 Anil Kumar Saini
+
+### humanlayer/skills
+
+- Origem: <https://github.com/humanlayer/skills>.
+- O que entrou: da `show-me`, pela `pr` do mattpocock/skills, o cardápio de visões do Resumo do corpo do PR.
+- Copyright (c) 2026 HumanLayer
 
 ### O texto da licença MIT
 

@@ -2283,6 +2283,14 @@ grupo inteiro morre, os processos em segundo plano inclusive. As linhas:
 - `<nome>: passou de <t> s`, que conta como falha, seguida das últimas 30 linhas da saída;
 - sem nenhuma a rodar: `nada a verificar`.
 
+A chave opcional `contagem` de cada `[[desenvolvimento.verificacoes]]` é uma expressão regular, com `re.MULTILINE`, que
+o `verificar` procura na saída inteira; vale a última ocorrência. Com grupos nomeados, a linha traz `<valor> <nome>` de
+cada um com valor não vazio, na ordem da expressão; sem grupo nomeado, o grupo 1 ou, sem grupo, o trecho inteiro; os
+espaços seguidos viram um. Com a chave `contagem = '(?P<ok>\d+) passed(?:, (?P<pulados>\d+) skipped)?'`, a linha é
+`testes: 2904 ok, 2 pulados (37,1 s)`. Se a expressão não casa, ou casa só com valores vazios, a linha é
+`<nome>: ok (<s> s); a contagem não casou com a saída`, que não é falha. A falha, a que passou do tempo, a pulada e a
+sem tempo não mudam.
+
 Com `GITHUB_ACTIONS=true`, a falha, a que passou do tempo e a de `requer` ganham mais duas coisas:
 
 - logo abaixo da linha da falha, uma linha
@@ -2450,7 +2458,7 @@ Muda o estado do bloco da lane, um passo por vez. Roda dentro da lane do bloco; 
 | `revisando` | `ready_for_review` → `reviewing` | — |
 | `revisado` | `reviewing` → `ready_for_closure` | o `revisao.md` sem item em `## Em aberto` |
 | `corrigir` | `reviewing`, ou `closing` sem PR mesclado → `executing` | em `closing`, os PRs da branch |
-| `finalizar [--resumo "<texto>"]` | `ready_for_closure` → `closing` | a `spec.md` igual à aprovada, a lane sem alteração, a passagem nova, as verificações e a aceitação; empurra e abre o PR |
+| `finalizar --corpo <arquivo> [--resumo "<texto>"]` | `ready_for_closure` → `closing` | a `spec.md` igual à aprovada, o corpo do PR, a lane sem alteração, a passagem nova, as verificações e a aceitação; empurra e abre o PR, ou troca o corpo do PR aberto |
 | `bloquear "<motivo>"` | os seis de `planning` a `ready_for_closure` → `blocked` | o motivo |
 | `desbloquear [--replanejar \| --seguir <ficha>]` | `blocked` → pela causa | a opção que a causa pede |
 | `status [--para <skill>]` | — | só lê: a linha do bloco com o estado, o caminho, a lane, a passagem, a spec e o próximo passo; sai sempre com 0 |
@@ -2515,25 +2523,38 @@ ou `<a> e <b> voltaram ao último commit`.
   commit, e o que não tem commit sai do disco (a volta que falha recusa com
   `bloco corrigir: <blocos>/<pasta>/gabarito.md não voltou ao último commit`); depois do commit, apaga a marca da
   revisão em andamento.
-- `finalizar [--resumo "<texto>"]` confere, nesta ordem: a spec aprovada, só de `ready_for_closure`
-  (`bloco finalizar: spec.md mudou depois da aprovação; rode harness.py bloco replanejar`); a lane sem alteração
+- `finalizar --corpo <arquivo> [--resumo "<texto>"]` confere, nesta ordem: a spec aprovada, só de `ready_for_closure`
+  (`bloco finalizar: spec.md mudou depois da aprovação; rode harness.py bloco replanejar`); o corpo do
+  `--corpo <arquivo>`, lido a partir da raiz da árvore, e as recusas dele, nesta ordem, todas com saída 1 e sem commit:
+  a falta do `--corpo` (`bloco finalizar: falta o --corpo <arquivo>; rode o /ela-harness:finalizar-bloco`), o arquivo
+  que falta ou é pasta (`bloco finalizar: <arquivo> não existe`), o que não se lê como UTF-8
+  (`bloco finalizar: <arquivo> não se lê como UTF-8`), a seção que falta
+  (`bloco finalizar: o corpo não tem a seção ## <título>`), a fora do molde
+  (`bloco finalizar: o corpo tem a seção ## <título>, fora do molde`), a ordem
+  (`bloco finalizar: as seções do corpo estão fora da ordem Resumo, Evidência e Perigo do merge`), a vazia
+  (`bloco finalizar: a seção ## <título> está vazia`), o texto antes do `## Resumo`
+  (`bloco finalizar: o corpo tem texto antes do ## Resumo`) e o `### Aceitação` ou `### Verificações` que o corpo já
+  traz (`bloco finalizar: o corpo já tem ### <título>; o núcleo o acrescenta`); a lane sem alteração
   (`bloco finalizar: a lane tem alterações sem commit`); a passagem nova do `origin/<ramo_principal>`, depois do
   `git fetch` dele e antes das verificações, que podem levar minutos
   (`bloco finalizar: passagem/v<N> mudou <IDs>; rode harness.py lane conferir`, e a recusa do fetch como está); as
   verificações do momento `finalizar` (`bloco finalizar: verificação <nome> falhou`, a primeira, seguida das linhas
   das que falharam; a que `requer` um arquivo que falta falha); e, com efeito externo, os itens de antes do merge do
   `aceitacao.md` em `ok` (`bloco finalizar: aceitação pendente: item <n>`, ou `itens <a> e <b>`). Depois, grava
-  `closing`, com o corpo no commit; faz o `git push -u origin <branch>`, com 60 s; e, sem PR aberto da branch, com
-  30 s, o
-  `gh pr create --base <ramo_principal> --head <branch> --title "<tipo>(<ID>): <resumo>" --body <corpo> --assignee <dono.github>`.
-  O tipo é o começo da branch; o resumo, o `--resumo` com os espaços juntados, ou o slug com espaços. O corpo tem as seções `## Objetivo` (o Objetivo da ficha, ou `—`), `## Aceitação` (a tabela
-  do `aceitacao.md`, ou `Sem verificação externa.`) e `## Verificações` (as linhas do `verificar`). As linhas são a da
-  transição, `branch <branch> enviada ao origin` e `PR #<n> aberto: <url>`, ou `PR #<n> já aberto: <url>` com o PR
-  aberto. A falha depois do commit dá
-  `closing gravado, mas <passo> falhou: <motivo>; rode harness.py bloco finalizar de novo`, com saída 1. Em
-  `closing`, o `finalizar` retoma: imprime `<ID> já está em closing; retomado`, não confere nada, refaz o push e abre o
-  PR que falta, com o corpo do último commit `chore(<ID>): closing` da lane. Com o PR da branch já mesclado no ramo
-  principal, recusa antes do push, com
+  `closing`, com o corpo no commit; faz o `git push -u origin <branch>`, com 60 s; e, sem PR aberto da branch, com 30 s,
+  o `gh pr create --base <ramo_principal> --head <branch> --title "<tipo>(<ID>): <resumo>" --body <corpo> --assignee <dono.github>`.
+  O tipo é o começo da branch; o resumo, o `--resumo` com os espaços juntados, ou o slug com espaços. O corpo é o texto
+  do arquivo, normalizado pela regra: o `\r\n` vira `\n`, cada linha perde os espaços e as tabulações do fim, as linhas
+  em branco seguidas viram uma, e as do começo e do fim saem. Entram o `### Aceitação` (a tabela do `aceitacao.md`, ou
+  `Sem verificação externa.`) e o `### Verificações` (`- <linha>` de cada linha do `verificar`) no fim da
+  `## Evidência`, antes do `## Perigo do merge`. Com o PR da branch aberto, o `gh pr edit <n> --body <corpo>`, com
+  30 s, troca o corpo dele. As linhas são a da transição, `branch <branch> enviada ao origin` e `PR #<n> aberto: <url>`,
+  ou `PR #<n> já aberto, corpo atualizado: <url>`. A falha depois do commit dá
+  `closing gravado, mas <passo> falhou: <motivo>; rode harness.py bloco finalizar de novo`, com saída 1; o
+  `<passo>` é `git push`, `gh pr create` ou `gh pr edit`. Em `closing`,
+  o `finalizar` retoma: imprime `<ID> já está em closing; retomado`, não lê o `--corpo`, não confere nada, refaz o
+  push e abre o PR que falta, ou troca o corpo do PR aberto, com o corpo do último commit `chore(<ID>): closing` da
+  lane. Com o PR da branch já mesclado no ramo principal, recusa antes do push, com
   `bloco finalizar: o PR #<n> já foi mesclado; rode harness.py lane fechar <ID> de uma sessão aberta na árvore principal, ou pelo terminal como última ação`.
 
 - `desbloquear [--replanejar | --seguir <ficha>]` age pela causa do bloqueio, o `bloqueio` do `estado.md`:
@@ -2611,12 +2632,13 @@ reviewing, ou closing sem PR mesclado → executing
 
 ### bloco finalizar
 
-ready_for_closure → closing: confere, empurra a branch e abre o PR
+ready_for_closure → closing: confere o corpo, empurra a branch e abre o PR
 
-`harness.py bloco finalizar [--resumo <texto>]`
+`harness.py bloco finalizar [--corpo <arquivo>] [--resumo <texto>]`
 
 | Argumento ou opção | Obrigatório | O que é |
 |---|---|---|
+| `--corpo <arquivo>` | não | o arquivo do corpo do PR, com ## Resumo, ## Evidência e ## Perigo do merge, lido a partir da raiz da árvore; obrigatório fora da retomada |
 | `--resumo <texto>` | não | o título do PR depois do tipo e do ID; o padrão é o slug com espaços |
 
 ### bloco desbloquear
@@ -3264,6 +3286,7 @@ refaz o espelho das fichas no Linear, sem duplicar nada
 | `nucleo/desenvolvimento/aceitacao.py` | Aceitação do bloco (spec 6c, §12): a seção da spec, o `aceitacao.md`, a conferência das provas por HTTP e a anotação dos itens manuais. |
 | `nucleo/desenvolvimento/bloco.py` | Bloco do desenvolvimento (spec 6c, §9.2 e §9.4): o formato do `estado.md`, as lanes vivas e os blocos do ramo principal. |
 | `nucleo/desenvolvimento/contexto.py` | Context Packet (spec 6c, §10): o pacote de leitura de uma ficha, montado da ficha e da cópia da passagem da árvore. |
+| `nucleo/desenvolvimento/corpo_do_pr.py` | O corpo do PR do bloco: a leitura do arquivo do `--corpo`, a conferência das três seções do molde e a montagem com a aceitação e as verificações. |
 | `nucleo/desenvolvimento/fichas.py` | Fichas do desenvolvimento (spec 6c, §9.1 a §9.3): as da passagem e as do backlog do código, os campos, os IDs citados, a forma e o estado. |
 | `nucleo/desenvolvimento/importacao.py` | Importação da passagem no repositório de código (spec 6c, §8): a tag conferida, a cópia, o relatório e o PR próprio, ou a cópia direta na montagem. |
 | `nucleo/desenvolvimento/iniciar.py` | O `iniciar <trilha>` de um projeto pelo plugin e a conferência do repositório de código (spec do porte 1, §7.5 e §7.6; spec 6d-repositorio, §7). |

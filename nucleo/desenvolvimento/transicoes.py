@@ -21,6 +21,7 @@ import bloco
 import campos
 import comum
 import contexto
+import corpo_do_pr
 import fichas
 import importacao
 import lanes
@@ -39,7 +40,7 @@ Muda o estado do bloco da lane, um passo por vez. Roda dentro da lane do bloco; 
 | `revisando` | `ready_for_review` → `reviewing` | — |
 | `revisado` | `reviewing` → `ready_for_closure` | o `revisao.md` sem item em `## Em aberto` |
 | `corrigir` | `reviewing`, ou `closing` sem PR mesclado → `executing` | em `closing`, os PRs da branch |
-| `finalizar [--resumo "<texto>"]` | `ready_for_closure` → `closing` | a `spec.md` igual à aprovada, a lane sem alteração, a passagem nova, as verificações e a aceitação; empurra e abre o PR |
+| `finalizar --corpo <arquivo> [--resumo "<texto>"]` | `ready_for_closure` → `closing` | a `spec.md` igual à aprovada, o corpo do PR, a lane sem alteração, a passagem nova, as verificações e a aceitação; empurra e abre o PR, ou troca o corpo do PR aberto |
 | `bloquear "<motivo>"` | os seis de `planning` a `ready_for_closure` → `blocked` | o motivo |
 | `desbloquear [--replanejar \\| --seguir <ficha>]` | `blocked` → pela causa | a opção que a causa pede |
 | `status [--para <skill>]` | — | só lê: a linha do bloco com o estado, o caminho, a lane, a passagem, a spec e o próximo passo; sai sempre com 0 |
@@ -104,25 +105,38 @@ ou `<a> e <b> voltaram ao último commit`.
   commit, e o que não tem commit sai do disco (a volta que falha recusa com
   `bloco corrigir: <blocos>/<pasta>/gabarito.md não voltou ao último commit`); depois do commit, apaga a marca da
   revisão em andamento.
-- `finalizar [--resumo "<texto>"]` confere, nesta ordem: a spec aprovada, só de `ready_for_closure`
-  (`bloco finalizar: spec.md mudou depois da aprovação; rode harness.py bloco replanejar`); a lane sem alteração
+- `finalizar --corpo <arquivo> [--resumo "<texto>"]` confere, nesta ordem: a spec aprovada, só de `ready_for_closure`
+  (`bloco finalizar: spec.md mudou depois da aprovação; rode harness.py bloco replanejar`); o corpo do
+  `--corpo <arquivo>`, lido a partir da raiz da árvore, e as recusas dele, nesta ordem, todas com saída 1 e sem commit:
+  a falta do `--corpo` (`bloco finalizar: falta o --corpo <arquivo>; rode o /ela-harness:finalizar-bloco`), o arquivo
+  que falta ou é pasta (`bloco finalizar: <arquivo> não existe`), o que não se lê como UTF-8
+  (`bloco finalizar: <arquivo> não se lê como UTF-8`), a seção que falta
+  (`bloco finalizar: o corpo não tem a seção ## <título>`), a fora do molde
+  (`bloco finalizar: o corpo tem a seção ## <título>, fora do molde`), a ordem
+  (`bloco finalizar: as seções do corpo estão fora da ordem Resumo, Evidência e Perigo do merge`), a vazia
+  (`bloco finalizar: a seção ## <título> está vazia`), o texto antes do `## Resumo`
+  (`bloco finalizar: o corpo tem texto antes do ## Resumo`) e o `### Aceitação` ou `### Verificações` que o corpo já
+  traz (`bloco finalizar: o corpo já tem ### <título>; o núcleo o acrescenta`); a lane sem alteração
   (`bloco finalizar: a lane tem alterações sem commit`); a passagem nova do `origin/<ramo_principal>`, depois do
   `git fetch` dele e antes das verificações, que podem levar minutos
   (`bloco finalizar: passagem/v<N> mudou <IDs>; rode harness.py lane conferir`, e a recusa do fetch como está); as
   verificações do momento `finalizar` (`bloco finalizar: verificação <nome> falhou`, a primeira, seguida das linhas
   das que falharam; a que `requer` um arquivo que falta falha); e, com efeito externo, os itens de antes do merge do
   `aceitacao.md` em `ok` (`bloco finalizar: aceitação pendente: item <n>`, ou `itens <a> e <b>`). Depois, grava
-  `closing`, com o corpo no commit; faz o `git push -u origin <branch>`, com 60 s; e, sem PR aberto da branch, com
-  30 s, o
-  `gh pr create --base <ramo_principal> --head <branch> --title "<tipo>(<ID>): <resumo>" --body <corpo> --assignee <dono.github>`.
-  O tipo é o começo da branch; o resumo, o `--resumo` com os espaços juntados, ou o slug com espaços. O corpo tem as seções `## Objetivo` (o Objetivo da ficha, ou `—`), `## Aceitação` (a tabela
-  do `aceitacao.md`, ou `Sem verificação externa.`) e `## Verificações` (as linhas do `verificar`). As linhas são a da
-  transição, `branch <branch> enviada ao origin` e `PR #<n> aberto: <url>`, ou `PR #<n> já aberto: <url>` com o PR
-  aberto. A falha depois do commit dá
-  `closing gravado, mas <passo> falhou: <motivo>; rode harness.py bloco finalizar de novo`, com saída 1. Em
-  `closing`, o `finalizar` retoma: imprime `<ID> já está em closing; retomado`, não confere nada, refaz o push e abre o
-  PR que falta, com o corpo do último commit `chore(<ID>): closing` da lane. Com o PR da branch já mesclado no ramo
-  principal, recusa antes do push, com
+  `closing`, com o corpo no commit; faz o `git push -u origin <branch>`, com 60 s; e, sem PR aberto da branch, com 30 s,
+  o `gh pr create --base <ramo_principal> --head <branch> --title "<tipo>(<ID>): <resumo>" --body <corpo> --assignee <dono.github>`.
+  O tipo é o começo da branch; o resumo, o `--resumo` com os espaços juntados, ou o slug com espaços. O corpo é o texto
+  do arquivo, normalizado pela regra: o `\\r\\n` vira `\\n`, cada linha perde os espaços e as tabulações do fim, as linhas
+  em branco seguidas viram uma, e as do começo e do fim saem. Entram o `### Aceitação` (a tabela do `aceitacao.md`, ou
+  `Sem verificação externa.`) e o `### Verificações` (`- <linha>` de cada linha do `verificar`) no fim da
+  `## Evidência`, antes do `## Perigo do merge`. Com o PR da branch aberto, o `gh pr edit <n> --body <corpo>`, com
+  30 s, troca o corpo dele. As linhas são a da transição, `branch <branch> enviada ao origin` e `PR #<n> aberto: <url>`,
+  ou `PR #<n> já aberto, corpo atualizado: <url>`. A falha depois do commit dá
+  `closing gravado, mas <passo> falhou: <motivo>; rode harness.py bloco finalizar de novo`, com saída 1; o
+  `<passo>` é `git push`, `gh pr create` ou `gh pr edit`. Em `closing`,
+  o `finalizar` retoma: imprime `<ID> já está em closing; retomado`, não lê o `--corpo`, não confere nada, refaz o
+  push e abre o PR que falta, ou troca o corpo do PR aberto, com o corpo do último commit `chore(<ID>): closing` da
+  lane. Com o PR da branch já mesclado no ramo principal, recusa antes do push, com
   `bloco finalizar: o PR #<n> já foi mesclado; rode harness.py lane fechar <ID> de uma sessão aberta na árvore principal, ou pelo terminal como última ação`.
 
 - `desbloquear [--replanejar | --seguir <ficha>]` age pela causa do bloqueio, o `bloqueio` do `estado.md`:
@@ -542,26 +556,11 @@ def corrigir(raiz: Path, perfil, executar=subprocess.run, agora=datetime.datetim
     return Saida(linhas, avisos=avisos(raiz, perfil, lane, novo))
 
 
-def _objetivo(raiz: Path, perfil, id_: str) -> str:
-    """Os itens do Objetivo da ficha, juntados por um espaço, ou `—` sem a ficha ou sem o campo."""
-    try:
-        ficha, _ = contexto.ficha_da_arvore(raiz, perfil, id_)
-    except Recusa:
-        return bloco.SEM
-    return " ".join(fichas.campo(ficha, "Objetivo") or []) or bloco.SEM
-
-
-def _corpo(raiz: Path, perfil, lane: LaneViva, tabela: aceitacao.Tabela, relatorio: verificacao.Relatorio) -> str:
-    """O corpo do PR e do commit `closing`: o Objetivo da ficha, a tabela da aceitação e as linhas do `verificar`."""
-    linhas_da_tabela = aceitacao.para_texto(tabela).rstrip("\n").split("\n")[2:]
-    return "\n\n".join((f"## Objetivo\n{_objetivo(raiz, perfil, lane.bloco.id)}",
-                        "## Aceitação\n" + "\n".join(linhas_da_tabela),
-                        "## Verificações\n" + "\n".join(relatorio.linhas)))
-
-
-def _conferir_finalizar(raiz: Path, perfil, lane: LaneViva, executar) -> str:
+def _conferir_finalizar(raiz: Path, perfil, lane: LaneViva,
+                        executar) -> tuple[aceitacao.Tabela, verificacao.Relatorio]:
     """O que o `finalizar` pede, nesta ordem: a lane sem alteração, a passagem do ramo principal depois do fetch, as
-    verificações do `finalizar` e, com efeito externo, a aceitação de antes do merge. Devolve o corpo."""
+    verificações do `finalizar` e, com efeito externo, a aceitação de antes do merge. Devolve a tabela da aceitação e o
+    relatório das verificações."""
     if not lane_sem_alteracao(raiz, executar):
         raise Recusa("bloco finalizar: a lane tem alterações sem commit")
     importacao.buscar_principal(raiz, perfil, executar)
@@ -585,7 +584,7 @@ def _conferir_finalizar(raiz: Path, perfil, lane: LaneViva, executar) -> str:
         if abertos:
             itens = f"item {abertos[0]}" if len(abertos) == 1 else f"itens {comum.juntar(abertos)}"
             raise Recusa(f"bloco finalizar: aceitação pendente: {itens}")
-    return _corpo(raiz, perfil, lane, tabela, relatorio)
+    return tabela, relatorio
 
 
 def _corpo_do_closing(raiz: Path, id_: str, executar) -> str:
@@ -627,13 +626,15 @@ def aviso_da_instalacao(perfil) -> str | None:
 
 
 def finalizar(raiz: Path, perfil, resumo: str | None = None, executar=subprocess.run,
-              agora=datetime.datetime.now) -> Saida:
-    """De `ready_for_closure`, confere, grava `closing` com o corpo no commit, empurra a branch e abre o PR, se ele
-    falta; de `closing`, retoma a falha sem conferir de novo, com o corpo do commit `closing`.
+              agora=datetime.datetime.now, corpo: str | None = None) -> Saida:
+    """De `ready_for_closure`, lê o arquivo do `corpo`, confere, grava `closing` com o corpo no commit, empurra a
+    branch e abre o PR, se ele falta, ou troca o corpo do PR aberto; de `closing`, retoma a falha sem conferir de
+    novo, com o corpo do commit `closing`.
 
     O aviso ao Linear (§9.5) sai da transição que gravou `closing`, com o link do PR quando o PR chegou a existir; a
-    retomada avisa `closing → closing` só quando traz o link, que é o que o Linear ainda não sabe. Fora da retomada, a
-    linha de `aviso_da_instalacao` vem depois das linhas da transição e fica fora do corpo do PR."""
+    retomada avisa `closing → closing` só quando traz o link, que é o que o Linear ainda não sabe. A retomada não lê
+    o `corpo`. Fora da retomada, a linha de `aviso_da_instalacao` vem depois das linhas da transição e fica fora do
+    corpo do PR."""
     lane = da_lane(raiz, perfil)
     bloco_ = lane.bloco
     retomada = bloco_.estado == "closing"
@@ -641,13 +642,16 @@ def finalizar(raiz: Path, perfil, resumo: str | None = None, executar=subprocess
     if retomada:
         _sem_pr_mesclado(raiz, perfil, lane, "finalizar", executar)
         linhas = [f"{bloco_.id} já está em closing; retomado"]
-        corpo = _corpo_do_closing(raiz, bloco_.id, executar)
+        texto_do_pr = _corpo_do_closing(raiz, bloco_.id, executar)
     else:
         _transicao(lane, "finalizar")
         _conferir_spec_aprovada(raiz, perfil, bloco_)
-        corpo = _conferir_finalizar(raiz, perfil, lane, executar)
+        texto = corpo_do_pr.normalizar(corpo_do_pr.ler(raiz, corpo))
+        corpo_do_pr.conferir(texto)
+        tabela, relatorio = _conferir_finalizar(raiz, perfil, lane, executar)
+        texto_do_pr = corpo_do_pr.montar(texto, tabela, relatorio.linhas)
         novo = mudar(bloco_, "closing", agora)
-        linhas = list(gravar_transicao(raiz, perfil, lane, novo, [], [], executar, agora, corpo=corpo))
+        linhas = list(gravar_transicao(raiz, perfil, lane, novo, [], [], executar, agora, corpo=texto_do_pr))
         aviso = aviso_da_instalacao(perfil)
         if aviso is not None:
             linhas.append(aviso)
@@ -667,11 +671,16 @@ def finalizar(raiz: Path, perfil, resumo: str | None = None, executar=subprocess
                      avisos_com())
     aberto = next((pr for pr in prs if pr.estado == "OPEN"), None)
     if aberto is not None:
-        return Saida((*linhas, f"PR #{aberto.numero} já aberto: {aberto.url}"), avisos=avisos_com(aberto.url))
+        _, motivo = importacao.falha(["gh", "pr", "edit", str(aberto.numero), "--body", texto_do_pr], "pr edit",
+                                     executar, importacao.TEMPO_LIMITE_GH, raiz)
+        if motivo is not None:
+            return Saida((*linhas, _de_novo("gh pr edit", motivo)), True, avisos_com())
+        return Saida((*linhas, f"PR #{aberto.numero} já aberto, corpo atualizado: {aberto.url}"),
+                     avisos=avisos_com(aberto.url))
     resumo = " ".join((resumo or "").split()) or bloco_.slug.replace("-", " ")
     titulo = f"{lane.ramo.split('/', 1)[0]}({bloco_.id}): {resumo}"
     feito, motivo = importacao.falha(["gh", "pr", "create", "--base", perfil.ramo_principal, "--head", lane.ramo,
-                                      "--title", titulo, "--body", corpo, "--assignee", perfil.dono.github],
+                                      "--title", titulo, "--body", texto_do_pr, "--assignee", perfil.dono.github],
                                      "pr create", executar, importacao.TEMPO_LIMITE_GH, raiz)
     if motivo is not None:
         return Saida((*linhas, _de_novo("gh pr create", motivo)), True, avisos_com())

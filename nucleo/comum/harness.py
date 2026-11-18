@@ -995,7 +995,7 @@ def _comando_bloco(args: argparse.Namespace) -> int:
     if args.acao == "bloquear":
         return _imprimir_saida(transicoes.bloquear(raiz, perfil, args.motivo), perfil)
     if args.acao == "finalizar":
-        return _imprimir_saida(transicoes.finalizar(raiz, perfil, args.resumo), perfil)
+        return _imprimir_saida(transicoes.finalizar(raiz, perfil, args.resumo, corpo=args.corpo), perfil)
     if args.acao == "desbloquear":
         return _imprimir_saida(transicoes.desbloquear(raiz, perfil, args.replanejar, args.seguir), perfil)
     if args.acao == "replanejar":
@@ -1483,7 +1483,11 @@ def _acrescentar_bloco(subcomandos: argparse._SubParsersAction) -> None:
         ("corrigir", "reviewing, ou closing sem PR mesclado → executing"),
     ):
         _nova_acao(acoes, nome, ajuda).set_defaults(funcao=_comando_bloco)
-    p_finalizar = _nova_acao(acoes, "finalizar", "ready_for_closure → closing: confere, empurra a branch e abre o PR")
+    p_finalizar = _nova_acao(
+        acoes, "finalizar", "ready_for_closure → closing: confere o corpo, empurra a branch e abre o PR")
+    p_finalizar.add_argument("--corpo", metavar="<arquivo>",
+                             help="o arquivo do corpo do PR, com ## Resumo, ## Evidência e ## Perigo do merge, lido a "
+                                  "partir da raiz da árvore; obrigatório fora da retomada")
     p_finalizar.add_argument("--resumo", metavar="<texto>",
                              help="o título do PR depois do tipo e do ID; o padrão é o slug com espaços")
     p_finalizar.set_defaults(funcao=_comando_bloco)

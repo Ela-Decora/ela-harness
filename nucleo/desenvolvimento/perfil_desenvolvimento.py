@@ -35,7 +35,7 @@ STATUS_PADRAO = (("espera", "Backlog"), ("pronta", "Todo"), ("andamento", "In Pr
 _TABELAS = ("projeto", "guarda", "desenvolvimento")
 _CHAVES = ("ramo_principal", "caminhos", "passagem", "dono", "verificacoes", "modelos", "revisao", "registro", "ci", "lane",
            "guarda", "aceitacao", "fichas", "codex", "linear")
-_CHAVES_DA_VERIFICACAO = ("nome", "comando", "caminhos", "momentos", "requer", "tempo_limite")
+_CHAVES_DA_VERIFICACAO = ("nome", "comando", "caminhos", "momentos", "requer", "tempo_limite", "contagem")
 _CHAVES_DA_LANE = ("limite", "pasta", "env_modelo", "env_copiados", "instalar", "desmontar", "portas")
 _CHAVES_DO_LINEAR = ("time", "projeto", "rotulo", "rotulo_bloqueio", "status")
 # Os marcadores do `instalar` e do `desmontar`, além do `porta.<nome>`.
@@ -78,6 +78,7 @@ class Verificacao:
     momentos: tuple[str, ...]
     requer: tuple[str, ...] = ()
     tempo_limite: int = 600
+    contagem: str | None = None
 
 
 @dataclass(frozen=True)
@@ -264,7 +265,14 @@ def _verificacao(bruta: dict, onde: str) -> Verificacao:
         raise PerfilInvalido(f"{onde}.momentos: {fora}; use {comum.juntar(MOMENTOS, 'ou')}")
     requer = _caminhos_normalizados(bruta, "requer", onde)
     tempo_limite = _inteiro(bruta, "tempo_limite", onde, 1, 3600, 600)
-    return Verificacao(nome, comando, caminhos, momentos, requer, tempo_limite)
+    contagem = None
+    if "contagem" in bruta:
+        contagem = texto(bruta, "contagem", onde)
+        try:
+            re.compile(contagem, re.MULTILINE)
+        except re.error as erro:
+            raise PerfilInvalido(f"{onde}.contagem não é uma expressão regular válida: {erro}") from None
+    return Verificacao(nome, comando, caminhos, momentos, requer, tempo_limite, contagem)
 
 
 def _verificacoes(desenvolvimento: dict) -> tuple[Verificacao, ...]:
