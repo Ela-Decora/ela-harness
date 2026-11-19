@@ -23,6 +23,7 @@ import comum
 import contexto
 import corpo_do_pr
 import fichas
+import fila
 import importacao
 import lanes
 import verificacao
@@ -81,7 +82,8 @@ As recusas do passo:
   `.superpowers/sdd/` cujo `plan-path` é o `plano.md` do bloco. Sem ela,
   `bloco executado: falta o ledger do SDD do plano.md; rode o /ela-harness:executar-bloco`; com tarefa sem a linha
   `Task <N>: complete`, `bloco executado: o ledger do SDD não dá como feita a tarefa <N>` (`feitas as tarefas 2 e 3`
-  no plural). Grava o `rulings.md` com as linhas `Ruling:` do ledger, uma por linha, ou com
+  no plural). Depois, roda as verificações do momento `executado`; na primeira que falha, recusa com
+  `bloco executado: verificação <nome> falhou`, seguida das linhas da falha. Grava o `rulings.md` com as linhas `Ruling:` do ledger, uma por linha, ou com
   `Nenhuma decisão foi tomada em nome de <dono.nome>.`, e o leva no commit da transição.
 - `revisado`: `bloco revisado: revisao.md tem <n> itens em ## Em aberto` (`1 item` no singular) e
   `bloco revisado: falta revisao.md com a seção ## Em aberto`. Item é a linha que começa, sem recuo, por `-`, `*`,
@@ -90,6 +92,10 @@ As recusas do passo:
 - `bloquear "<motivo>"`: grava o `bloqueio` `manual` e o motivo, com os espaços e as quebras juntados num espaço;
   vazio ou `—`, `bloco bloquear: o motivo não pode ficar vazio`. Em `closing`, a recusa é
   `bloco bloquear: <ID> está em closing; rode harness.py bloco corrigir antes`.
+
+O `executado` e o `finalizar`, também na retomada, seguram do começo ao fim a trava `harness-portao` do diretório do
+git da lane; o Stop da lane não confere nada enquanto ela está tomada (veja `harness.py verificar`), e o segundo
+`executado` ou `finalizar` da mesma lane espera o primeiro.
 
 O commit leva só os arquivos do passo que mudaram: o que já estava no índice e o que mudou no disco continuam como
 estavam. Ele roda o pre-commit; recusado, os arquivos que o harness gravou no passo (o `estado.md` e, no `planejado`, o
@@ -444,7 +450,13 @@ def _tarefas_nao_feitas(numeros: list[int]) -> str:
 
 def executado(raiz: Path, perfil, executar=subprocess.run, agora=datetime.datetime.now) -> Saida:
     """De `executing`, confere a lane sem alteração e o ledger do SDD do plano, com todas as tarefas feitas, e grava
-    o `rulings.md` com as linhas `Ruling:` dele no commit da transição (spec 6d-bloco, §8.3)."""
+    o `rulings.md` com as linhas `Ruling:` dele no commit da transição (spec 6d-bloco, §8.3). Do começo ao fim, segura
+    a trava do portão da árvore (decisão 27)."""
+    with fila.portao(fila.arquivo_do_portao(raiz, executar)):
+        return _executado(raiz, perfil, executar, agora)
+
+
+def _executado(raiz: Path, perfil, executar, agora) -> Saida:
     lane = da_lane(raiz, perfil)
     repetido = _transicao(lane, "executado")
     if repetido is not None:
@@ -464,12 +476,14 @@ def executado(raiz: Path, perfil, executar=subprocess.run, agora=datetime.dateti
                if numero not in feitas_no_ledger]
     if abertas:
         raise Recusa(f"bloco executado: o ledger do SDD {_tarefas_nao_feitas(abertas)}")
+    _verificar_no_portao(raiz, perfil, lane, "executado", verificacao.EXECUTADO, executar)
     decisoes = rulings(ledger) or [f"Nenhuma decisão foi tomada em nome de {perfil.dono.nome}."]
     rulings_md = f"{pasta}/{RULINGS}"
     comum.escrever_texto(Path(raiz) / rulings_md, "\n".join(decisoes) + "\n")
     novo = mudar(lane.bloco, VERBOS["executado"][1], agora)
-    return Saida(gravar_transicao(raiz, perfil, lane, novo, [rulings_md], [rulings_md], executar, agora),
-                 avisos=avisos(raiz, perfil, lane, novo))
+    linhas = gravar_transicao(raiz, perfil, lane, novo, [rulings_md], [rulings_md], executar, agora)
+    verificacao.marcar_portao(raiz, perfil, verificacao.EXECUTADO, executar)
+    return Saida(linhas, avisos=avisos(raiz, perfil, lane, novo))
 
 
 def revisando(raiz: Path, perfil, executar=subprocess.run, agora=datetime.datetime.now) -> Saida:
@@ -556,6 +570,18 @@ def corrigir(raiz: Path, perfil, executar=subprocess.run, agora=datetime.datetim
     return Saida(linhas, avisos=avisos(raiz, perfil, lane, novo))
 
 
+def _verificar_no_portao(raiz: Path, perfil, lane: LaneViva, verbo: str, momento: str,
+                         executar) -> verificacao.Relatorio:
+    """Roda as verificações do `momento` e recusa, com as linhas da falha, na primeira que falha."""
+    base = verificacao.base_da_arvore(raiz, perfil, lane, executar)
+    relatorio = verificacao.verificar(raiz, perfil, momento, verificacao.mudados(raiz, base, executar),
+                                      executar=executar)
+    if relatorio.falhou:
+        primeira = next(execucao for execucao in relatorio.execucoes if execucao.estado == verificacao.FALHOU)
+        raise Recusa("\n".join((f"bloco {verbo}: verificação {primeira.nome} falhou", *relatorio.detalhes)))
+    return relatorio
+
+
 def _conferir_finalizar(raiz: Path, perfil, lane: LaneViva,
                         executar) -> tuple[aceitacao.Tabela, verificacao.Relatorio]:
     """O que o `finalizar` pede, nesta ordem: a lane sem alteração, a passagem do ramo principal depois do fetch, as
@@ -569,11 +595,7 @@ def _conferir_finalizar(raiz: Path, perfil, lane: LaneViva,
         for afetado in importacao.afetados(raiz, novo, [lane], perfil, executar):
             motivo = bloco.motivo_da_passagem(novo.versao, [*afetado.mudaram, *afetado.sairam])
             raise Recusa(f"bloco finalizar: {motivo}; rode harness.py lane conferir")
-    base = verificacao.base_da_arvore(raiz, perfil, lane, executar)
-    relatorio = verificacao.verificar(raiz, perfil, verificacao.FINALIZAR, verificacao.mudados(raiz, base, executar))
-    if relatorio.falhou:
-        primeira = next(execucao for execucao in relatorio.execucoes if execucao.estado == verificacao.FALHOU)
-        raise Recusa("\n".join((f"bloco finalizar: verificação {primeira.nome} falhou", *relatorio.detalhes)))
+    relatorio = _verificar_no_portao(raiz, perfil, lane, "finalizar", verificacao.FINALIZAR, executar)
     tabela = aceitacao.Tabela(lane.bloco.id, ())
     if lane.bloco.efeito_externo == "sim":
         relativo = f"{pasta_do_bloco(perfil, lane.bloco)}/{aceitacao.ARQUIVO}"
@@ -634,7 +656,12 @@ def finalizar(raiz: Path, perfil, resumo: str | None = None, executar=subprocess
     O aviso ao Linear (§9.5) sai da transição que gravou `closing`, com o link do PR quando o PR chegou a existir; a
     retomada avisa `closing → closing` só quando traz o link, que é o que o Linear ainda não sabe. A retomada não lê
     o `corpo`. Fora da retomada, a linha de `aviso_da_instalacao` vem depois das linhas da transição e fica fora do
-    corpo do PR."""
+    corpo do PR. Do começo ao fim, também na retomada, segura a trava do portão da árvore (decisão 27)."""
+    with fila.portao(fila.arquivo_do_portao(raiz, executar)):
+        return _finalizar(raiz, perfil, resumo, executar, agora, corpo)
+
+
+def _finalizar(raiz: Path, perfil, resumo: str | None, executar, agora, corpo: str | None) -> Saida:
     lane = da_lane(raiz, perfil)
     bloco_ = lane.bloco
     retomada = bloco_.estado == "closing"
@@ -652,6 +679,7 @@ def finalizar(raiz: Path, perfil, resumo: str | None = None, executar=subprocess
         texto_do_pr = corpo_do_pr.montar(texto, tabela, relatorio.linhas)
         novo = mudar(bloco_, "closing", agora)
         linhas = list(gravar_transicao(raiz, perfil, lane, novo, [], [], executar, agora, corpo=texto_do_pr))
+        verificacao.marcar_portao(raiz, perfil, verificacao.FINALIZAR, executar)
         aviso = aviso_da_instalacao(perfil)
         if aviso is not None:
             linhas.append(aviso)

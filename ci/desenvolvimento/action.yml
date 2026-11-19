@@ -1,5 +1,12 @@
 name: harness (desenvolvimento)
 description: O CI do projeto de desenvolvimento, na mesma versão do plugin que o .claude/settings.json fixa.
+inputs:
+  passo:
+    description: Com invariantes, roda só o passo das invariantes e pula a instalação e as verificações.
+    default: ""
+  verificacao:
+    description: O nome de uma verificação do momento finalizar. Com ele, roda só essa verificação e pula as invariantes.
+    default: ""
 runs:
   using: composite
   steps:
@@ -14,6 +21,7 @@ runs:
         git config --global user.name "harness-ci"
         git config --global user.email "harness-ci@users.noreply.github.com"
     - name: invariantes
+      if: inputs.verificacao == ''
       shell: bash
       env:
         BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
@@ -25,12 +33,20 @@ runs:
           python .claude/harness/harness.py invariantes --base "$BASE" --verbose
         fi
     - name: instalacao
+      if: inputs.passo != 'invariantes'
       shell: bash
       run: |
         export HARNESS_NUCLEO="$GITHUB_ACTION_PATH/../.."
         python .claude/harness/harness.py ci instalar
     - name: verificacoes
+      if: inputs.passo != 'invariantes'
       shell: bash
+      env:
+        SO: ${{ inputs.verificacao }}
       run: |
         export HARNESS_NUCLEO="$GITHUB_ACTION_PATH/../.."
-        python .claude/harness/harness.py verificar --momento finalizar
+        if [ -n "$SO" ]; then
+          python .claude/harness/harness.py verificar --momento finalizar --so "$SO"
+        else
+          python .claude/harness/harness.py verificar --momento finalizar
+        fi

@@ -1,5 +1,48 @@
 # Changelog
 
+## v0.5.0 — 2026-11-18
+
+No desenvolvimento, a verificação pesada sai do fim de cada turno e roda uma vez, nos portões do bloco, com uma árvore por vez na máquina. O CI gerado roda só no PR, com um job por verificação, e o CI do plugin roda a suíte em paralelo.
+
+### O que mudou desde a 0.4.3
+
+- O momento `executado`: o `momentos` de uma `[[desenvolvimento.verificacoes]]` aceita `stop`, `executado` e `finalizar`. O `harness.py verificar --momento executado` roda todas as verificações do momento, mudado ou não, e o `requer` que falta é falha, como no `finalizar`. O `harness.py bloco executado` as roda depois de conferir a lane sem alteração e o ledger completo, e recusa, com 1 e sem commit, com `bloco executado: verificação <nome> falhou` e as linhas da falha. Sem verificação com `executado` no perfil, a transição segue como antes. O `verificacoes.md` gerado traz os momentos de cada verificação, e o `ciclo.md` gerado diz que o `bloco executado` roda as do momento e que cada tarefa do plano roda só os testes dela.
+- A marca nos portões: o `bloco executado` e o `bloco finalizar` gravam a marca `harness-verificado` da árvore depois do commit da transição, quando toda verificação de `stop` do perfil tem também o momento do portão; o Stop seguinte, sem mudança, não roda nada. No `finalizar`, a marca sai logo depois do commit `closing`, antes do push, e a retomada não grava. A marca que não se grava não derruba o portão.
+- O aviso do Stop lento: a verificação que passa em mais de 30 s no Stop da lane acrescenta ao aviso do hook a linha `<nome>: levou <s> s no Stop; passe-a para o momento executado`. Não bloqueia, não impede a marca e só sai quando nenhuma verificação falhou.
+- A fila: antes da primeira verificação, o `verificar` pega uma trava no arquivo `harness-fila` do diretório comum do git, que a árvore principal e as lanes dividem, e a solta depois da última. Vale para o Stop, o `harness.py verificar`, o `bloco executado` e o `bloco finalizar`. Quem espera imprime uma vez, na saída de erro, `fila: esperando a verificação de <árvore>`. No Stop, a espera conta contra o teto de 840 s, e sem a trava até o prazo as verificações dão `sem tempo no Stop`, sem falha e sem marca; fora dele, a espera não tem prazo, e o `tempo_limite` conta só depois da trava. Nada é travado com `GITHUB_ACTIONS=true`, sem verificação a rodar, sem o módulo `fcntl`, fora de um repositório git ou dentro do comando de uma verificação, que herda `HARNESS_NA_FILA=1`. A trava cai com o processo, e não há arquivo a limpar.
+- A trava do portão: o `bloco executado` e o `bloco finalizar`, também na retomada, seguram do começo ao fim uma trava no arquivo `harness-portao` do diretório do git da própria árvore. O Stop da lane que a acha tomada não roda invariantes nem verificações, e o que acha a fila com a própria árvore não verifica nem espera. O segundo portão da mesma árvore espera o primeiro.
+- O `harness.py verificar --so <nome>` roda só a verificação com esse nome, se ela é do momento. O nome que o perfil não tem, ou que não é do momento, sai com 1 e `verificar: o perfil não tem a verificação <nome> no momento <momento>`. No momento `stop`, o `--so` não grava a marca.
+- Os agentes e as skills: o `implementador-mecanico` e o `implementador-integracao` rodam os testes que cobrem os arquivos que mudaram, e não a suíte nem o lint do repositório inteiro; o `revisor-task` e o `re-revisor` rodam os testes da tarefa. A `/ela-harness:executar-bloco` roda o `bloco executado` em segundo plano, com a saída num arquivo, e, na recusa pela verificação, despacha o implementador de integração com a saída da falha, até duas voltas, antes de levar ao dono. O `references/despachos.md` dela tira do despacho do implementador a frase do modelo do SDD que manda rodar a suíte inteira antes do commit. A `/ela-harness:finalizar-bloco` deixa de rodar o `verificar --momento finalizar` no passo 1, porque o `bloco finalizar` roda as mesmas verificações, e o roda em segundo plano.
+- O CI gerado do desenvolvimento: o `harness.yml` roda só em `pull_request` no ramo do perfil, com o run antigo do mesmo PR cancelado, e tem o job `invariantes`, um job `verificação: <nome>` por verificação com `finalizar`, em paralelo e com o checkout raso, e o job final `harness`, que falha se algum dos outros não passou. Sem verificação com `finalizar`, o job das verificações não é escrito. O `ci/desenvolvimento/action.yml` ganha as entradas `passo` e `verificacao`; sem as duas, roda tudo, como antes. O `harness.yml` do planejamento não muda. Sem perfil válido, o item `ci` do `harness.py iniciar --conferir` diz `ci: falta: o perfil válido; resolva o item perfil primeiro`.
+- O CI do plugin: o `ci.yml` roda só em PR na `main`, com o run antigo do mesmo PR cancelado, e a suíte roda pelo `tests/paralelo.py`, um processo por módulo de teste, que sai com 1 com alguma falha ou com um módulo que não rodou teste nenhum. Depois do merge, nada roda na `main`.
+
+Quem atualiza um projeto da trilha de desenvolvimento:
+
+1. Rode o `harness.py gerar`, que reescreve o `harness.yml`, o `verificacoes.md` e o `ciclo.md`, e commite os três.
+2. No perfil, passe a verificação do repositório inteiro de `stop` para `executado`. Antes:
+
+   ```toml
+   [[desenvolvimento.verificacoes]]
+   nome = "testes"
+   comando = "pytest -q"
+   caminhos = []
+   momentos = ["stop", "finalizar"]
+   ```
+
+   Depois:
+
+   ```toml
+   [[desenvolvimento.verificacoes]]
+   nome = "testes"
+   comando = "pytest -q"
+   caminhos = []
+   momentos = ["executado", "finalizar"]
+   ```
+
+   Rode o `harness.py gerar` de novo depois de mudar o perfil.
+3. Na proteção do ramo, mantenha o check `harness` como exigido e ligue a regra da branch em dia antes do merge: o CI roda só no PR, e sem ela o resultado de dois PRs mesclados em sequência fica sem CI.
+4. A verificação que lê o histórico do git passa a buscá-lo no próprio comando, como com `git fetch --unshallow`, porque o job dela faz o checkout raso.
+
 ## v0.4.3 — 2026-11-17
 
 O PR do bloco sai com Resumo, Evidência e Perigo do merge, no lugar de uma lista de campos, e a linha dos testes diz quantos rodaram, quando o perfil traz a `contagem` da verificação.

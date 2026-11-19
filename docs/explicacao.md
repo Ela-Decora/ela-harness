@@ -52,7 +52,7 @@ nada a corrigir, ele só registra a migração. A verificação nova só avisa n
 ## Limitações
 
 - **Uma pessoa por vez.** O `STATUS.md` acompanha um documento ou um pacote, e duas sessões simultâneas o disputam.
-- **CI que só informa.** Sem proteção de branch, um check vermelho não impede o merge.
+- **CI que só informa.** Sem proteção de branch, um check vermelho não impede o merge. No desenvolvimento, o CI roda só no PR: sem a regra da branch em dia, o resultado do merge fica sem CI. **Verificação pesada nos portões.** No desenvolvimento, a de `stop` roda a cada fim de turno, e as de `executado` e `finalizar`, uma vez, no `bloco executado` e no `bloco finalizar`; uma fila deixa rodar uma árvore por vez na máquina.
 - **Guarda que lê só o texto do comando.** `eval` e script em arquivo passam; o hook Stop só confere as invariantes.
 - **Plugin e pre-commit ativados em cada clone.** O plugin instala por pasta (`--scope project`), e o pre-commit só roda depois de `git config core.hooksPath .githooks`; o `--no-verify` o pula.
 - **Regras pela pasta do arquivo lido.** As de `.claude/rules/` entram pelo `paths`; YAML inválido as liga sempre.

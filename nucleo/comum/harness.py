@@ -864,14 +864,16 @@ def _comando_contexto(args: argparse.Namespace) -> int:
 
 def _comando_verificar(args: argparse.Namespace) -> int:
     """Roda as verificações do perfil para o momento, na árvore atual (spec 6c, §11.1). Na lane, o `stop` grava a marca
-    sem falha. Sai com 1 se alguma falha."""
+    sem falha. Com `--so`, roda só essa verificação. Sai com 1 se alguma falha."""
     raiz, perfil = _projeto_de_codigo()
     lane = bloco.lane_pelos_arquivos(raiz, perfil)
-    if args.momento == verificacao.STOP and lane is not None:
+    if args.so is not None:
+        verificacao.conferir_so(perfil, args.momento, args.so)
+    if args.momento == verificacao.STOP and lane is not None and args.so is None:
         relatorio = verificacao.no_stop(raiz, perfil, lane, None, sempre=True)
     else:
         base = verificacao.base_da_arvore(raiz, perfil, lane)
-        relatorio = verificacao.verificar(raiz, perfil, args.momento, verificacao.mudados(raiz, base))
+        relatorio = verificacao.verificar(raiz, perfil, args.momento, verificacao.mudados(raiz, base), so=args.so)
     for linha in relatorio.linhas:
         print(linha)
     return 1 if relatorio.falhou else 0
@@ -1424,8 +1426,12 @@ def _acrescentar_verificar(subcomandos: argparse._SubParsersAction) -> None:
         description=verificacao.AJUDA,
     )
     p_verificar.add_argument(
-        "--momento", required=True, choices=(verificacao.STOP, verificacao.FINALIZAR),
-        help="stop: as que casam com o que mudou; finalizar: todas as do fim do bloco",
+        "--momento", required=True, choices=perfil_desenvolvimento.MOMENTOS,
+        help="stop: as que casam com o que mudou; executado: todas as do bloco executado; finalizar: todas as do fim do "
+             "bloco",
+    )
+    p_verificar.add_argument(
+        "--so", metavar="<nome>", help="roda só a verificação com esse nome, se ela é do momento",
     )
     p_verificar.set_defaults(funcao=_comando_verificar)
 

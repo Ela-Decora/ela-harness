@@ -17,19 +17,21 @@ import subprocess
 import tempfile
 import time
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import bloco
 import comum
+import fila
 import invariantes
 import perfil_desenvolvimento
 from bloco import LaneViva
 from perfil_desenvolvimento import Verificacao
 
-STOP, FINALIZAR = perfil_desenvolvimento.MOMENTOS
+STOP, EXECUTADO, FINALIZAR = perfil_desenvolvimento.MOMENTOS
 TETO_DO_STOP = 840
 LINHAS_DA_SAIDA = 30
+LIMIAR_DO_AVISO = 30
 NO_CI = "GITHUB_ACTIONS"
 _FALTA_DO_DASH = re.compile(r"(?:.*: )?\d+: ([^\s:]+): not found")
 _FALTA_DO_BASH = re.compile(r"(?:.*: )?([^\s:]+): command not found")
@@ -42,11 +44,16 @@ SEM_TEMPO = "sem tempo"
 
 AJUDA = """\
 Roda as verificações do perfil (`[[desenvolvimento.verificacoes]]`) na árvore atual, a lane ou a árvore principal, para
-um dos dois momentos do `--momento`:
+um dos três momentos do `--momento`:
 
 - `stop`: as que têm `stop` em `momentos` e um padrão de `caminhos` que casa com um arquivo mudado; com `caminhos`
   vazio, basta qualquer mudado. Sem mudado, nenhuma roda.
+- `executado`: todas as que têm `executado` em `momentos`, mudado ou não; é o que o `harness.py bloco executado` roda.
 - `finalizar`: todas as que têm `finalizar` em `momentos`, mudado ou não.
+
+Com `--so <nome>`, roda só a verificação com esse nome, se ela é do momento. Se o perfil não a tem naquele momento, o
+comando sai com 1 e a linha `verificar: o perfil não tem a verificação <nome> no momento <momento>`, sem rodar nada.
+No `stop` numa lane, o `--so` não grava a marca.
 
 Mudados são os arquivos do `git diff --name-only <base>...HEAD` e os do `git status`, sem commit e não rastreados. Numa
 lane reconhecida pelos arquivos, a base é o `base` do `estado.md` do bloco, se o commit existe; fora de lane, a
@@ -54,7 +61,8 @@ merge-base do HEAD com o ramo principal do origin. Sem HEAD ou sem essa base, to
 rastreados e os não rastreados, sem os ignorados.
 
 Antes de rodar, cada caminho de `requer` precisa existir na raiz. Faltando um, o `stop` dá
-`<nome>: pulada; falta <caminho>`, sem falha, e o `finalizar` dá `<nome>: falta <caminho>`, com falha.
+`<nome>: pulada; falta <caminho>`, sem falha, e o `executado` e o `finalizar` dão `<nome>: falta <caminho>`, com
+falha.
 
 Cada verificação roda por `sh -c "<comando>"`, na raiz da árvore, com o ambiente herdado, a entrada fechada e a saída
 de erro junto da saída, num grupo de processos próprio. Ela acaba quando o `sh` sai, sem esperar o processo em segundo
@@ -65,6 +73,9 @@ grupo inteiro morre, os processos em segundo plano inclusive. As linhas:
 - `<nome>: falhou (saída <c>)`, seguida das últimas 30 linhas da saída, com recuo de 2;
 - `<nome>: passou de <t> s`, que conta como falha, seguida das últimas 30 linhas da saída;
 - sem nenhuma a rodar: `nada a verificar`.
+
+No `stop`, a verificação que passa e leva mais de 30 s ganha, no aviso do Stop, a linha
+`<nome>: levou <s> s no Stop; passe-a para o momento executado`. Só sai sem falha, e a marca é gravada do mesmo jeito.
 
 A chave opcional `contagem` de cada `[[desenvolvimento.verificacoes]]` é uma expressão regular, com `re.MULTILINE`, que
 o `verificar` procura na saída inteira; vale a última ocorrência. Com grupos nomeados, a linha traz `<valor> <nome>` de
@@ -88,12 +99,26 @@ O comando sai com 0 sem falha e com 1 com alguma. A pulada não é falha.
 Numa lane, o `--momento stop` sem falha grava a marca da árvore, o resumo do HEAD, do `git diff HEAD --binary`, sem o
 diff externo nem o textconv da configuração do usuário, e da lista e do conteúdo dos não rastreados, em
 `harness-verificado`, no diretório do git da lane. O Stop da lane compara a marca antes de rodar: igual à gravada,
-nada roda. O `finalizar` e a árvore principal não gravam marca.
+nada roda. O `bloco executado` e o `bloco finalizar` gravam a mesma marca
+depois do commit da transição, quando toda verificação de `stop` do perfil tem também o momento do portão; assim, o Stop
+seguinte não roda de novo. O `verificar --momento executado`, o `--momento finalizar`, o `--so` e a árvore principal não
+gravam marca.
 
 No Stop, as verificações somam até 840 s, abaixo do tempo limite do hook: cada uma roda com o menor entre o
 `tempo_limite` dela e o que resta, e a que não cabe, por não começar ou por ser interrompida no teto, dá
 `<nome>: sem tempo no Stop; rode harness.py verificar --momento stop`, sem falha e sem gravar a marca. Pelo terminal,
 o `verificar` não tem esse teto.
+
+As verificações rodam uma árvore por vez na máquina: antes da primeira, o `verificar` pega uma trava exclusiva no
+arquivo `harness-fila` do diretório comum do git, que a árvore principal e as lanes dividem, e a solta depois da
+última. Quem espera imprime uma vez, na saída de erro, `fila: esperando a verificação de <árvore>`, com o nome da pasta
+da árvore que segura a trava, ou `outra árvore` antes de ela se escrever no arquivo. No Stop, a espera conta contra os
+840 s: sem a trava até lá, todas dão `sem tempo no Stop`; fora do Stop, a espera não tem prazo, e o `tempo_limite`
+conta só depois da trava. Não há fila no CI, sem verificação a rodar, sem o módulo `fcntl`, fora de um repositório git e dentro do comando
+de uma verificação, que herda a marca `HARNESS_NA_FILA=1`. O Stop de uma lane cuja própria árvore segura a fila, com o
+portão dela rodando, não espera nem verifica. O `bloco executado` e o `bloco finalizar` seguram ainda, do começo ao
+fim, a trava `harness-portao` do diretório do git da própria árvore: o Stop que a acha tomada não roda invariantes nem
+verificações e não espera, e o segundo portão da mesma árvore espera o primeiro, sem aviso.
 """
 
 
@@ -104,6 +129,7 @@ class Execucao:
     nome: str
     estado: str
     linhas: tuple[str, ...]
+    segundos: float = field(default=0.0, compare=False)
 
 
 @dataclass(frozen=True)
@@ -143,6 +169,13 @@ class Relatorio:
         """A primeira linha de cada pulada e de cada sem tempo."""
         return tuple(execucao.linhas[0] for execucao in self.execucoes if execucao.estado in (PULADA, SEM_TEMPO))
 
+    @property
+    def lentas(self) -> tuple[str, ...]:
+        """Uma linha por verificação que passou em mais de `LIMIAR_DO_AVISO` s."""
+        return tuple(
+            f"{execucao.nome}: levou {_segundos(execucao.segundos)} s no Stop; passe-a para o momento {EXECUTADO}"
+            for execucao in self.execucoes if execucao.estado == OK and execucao.segundos > LIMIAR_DO_AVISO)
+
 
 def base_da_arvore(raiz: Path, perfil, lane: LaneViva | None, executar=subprocess.run) -> str | None:
     """A base dos mudados: numa lane, o `base` do bloco, se o commit existe; fora dela, a merge-base do HEAD com o ramo
@@ -175,14 +208,21 @@ def mudados(raiz: Path, base: str | None, executar=subprocess.run) -> list[str]:
     return list(dict.fromkeys(_nomes(feito.stdout)))
 
 
-def selecionar(perfil, momento: str, mudados_: list[str]) -> list[Verificacao]:
-    """As verificações do momento, na ordem do perfil: no `finalizar`, todas as dele; no `stop`, as que têm um padrão
-    de `caminhos` que casa com um mudado, ou `caminhos` vazio e algum mudado."""
+def conferir_so(perfil, momento: str, so: str) -> None:
+    """Recusa o `--so` que não nomeia uma verificação do perfil naquele momento."""
+    if not any(v.nome == so and momento in v.momentos for v in perfil.verificacoes):
+        raise bloco.Recusa(f"verificar: o perfil não tem a verificação {so} no momento {momento}")
+
+
+def selecionar(perfil, momento: str, mudados_: list[str], so: str | None = None) -> list[Verificacao]:
+    """As verificações do momento, na ordem do perfil: no `executado` e no `finalizar`, todas as dele; no `stop`, as
+    que têm um padrão de `caminhos` que casa com um mudado, ou `caminhos` vazio e algum mudado. Com `so`, só a verificação
+    desse nome."""
     escolhidas = []
     for verificacao in perfil.verificacoes:
-        if momento not in verificacao.momentos:
+        if momento not in verificacao.momentos or (so is not None and verificacao.nome != so):
             continue
-        if momento == FINALIZAR or (mudados_ and (not verificacao.caminhos or any(
+        if momento != STOP or (mudados_ and (not verificacao.caminhos or any(
                 comum.padrao_que_casa(caminho, verificacao.caminhos) for caminho in mudados_))):
             escolhidas.append(verificacao)
     return escolhidas
@@ -322,24 +362,37 @@ def _executar(verificacao: Verificacao, raiz: Path, momento: str, prazo: float |
     if codigo != 0:
         falha = f"{nome}: falhou (saída {codigo})"
         return Execucao(nome, FALHOU, linhas_da_falha(nome, falha, saida, ultimas, ambiente))
-    segundos = _segundos(fim - inicio)
+    duracao = fim - inicio
+    segundos = _segundos(duracao)
     if verificacao.contagem is None:
-        return Execucao(nome, OK, (f"{nome}: ok ({segundos} s)",))
+        return Execucao(nome, OK, (f"{nome}: ok ({segundos} s)",), duracao)
     contado = texto_da_contagem(verificacao.contagem, saida)
     if not contado:
-        return Execucao(nome, OK, (f"{nome}: ok ({segundos} s); a contagem não casou com a saída",))
-    return Execucao(nome, OK, (f"{nome}: {contado} ({segundos} s)",))
+        return Execucao(nome, OK, (f"{nome}: ok ({segundos} s); a contagem não casou com a saída",), duracao)
+    return Execucao(nome, OK, (f"{nome}: {contado} ({segundos} s)",), duracao)
 
 
 def verificar(raiz: Path, perfil, momento: str, mudados_: list[str], prazo: float | None = None,
               relogio=time.monotonic, rodar=rodar_comando,
-              ambiente: Mapping[str, str] = os.environ) -> Relatorio:
-    """Roda as verificações selecionadas, uma a uma. Com prazo, no relógio dado, cada uma roda com o menor entre o
-    `tempo_limite` e o que resta, e a que não cabe fica sem tempo."""
-    return Relatorio(tuple(
-        _executar(verificacao, raiz, momento, prazo, relogio, rodar, ambiente)
-        for verificacao in selecionar(perfil, momento, mudados_)
-    ))
+              ambiente: Mapping[str, str] = os.environ, so: str | None = None,
+              executar=subprocess.run) -> Relatorio:
+    """Roda as verificações selecionadas, uma a uma, com a vaga da fila. Com prazo, no relógio dado, cada uma roda com
+    o menor entre o `tempo_limite` e o que resta, e a que não cabe fica sem tempo; sem a vaga até o prazo, todas ficam
+    sem tempo. Sem verificação escolhida, no CI ou dentro do comando de uma verificação, não há fila. Com `so`, só a
+    esse nome. O `executar` é o do git, que acha o arquivo da fila."""
+    escolhidas = selecionar(perfil, momento, mudados_, so)
+
+    def rodadas() -> Relatorio:
+        return Relatorio(tuple(
+            _executar(verificacao, raiz, momento, prazo, relogio, rodar, ambiente) for verificacao in escolhidas
+        ))
+
+    if not escolhidas or no_ci(ambiente) or ambiente.get(fila.MARCA_DO_AMBIENTE) == "1":
+        return rodadas()
+    with fila.vaga(fila.arquivo(raiz, executar), raiz, prazo, relogio) as tomada:
+        if not tomada:
+            return Relatorio(tuple(_sem_tempo(verificacao.nome) for verificacao in escolhidas))
+        return rodadas()
 
 
 def marca(raiz: Path, executar=subprocess.run) -> str:
@@ -378,15 +431,41 @@ def gravar_marca(raiz: Path, valor: str, executar=subprocess.run) -> None:
     comum.escrever_texto(_arquivo_da_marca(raiz, executar), valor + "\n")
 
 
+def portao_cobre_o_stop(perfil, momento: str) -> bool:
+    """Se o portão do `momento` roda tudo o que o Stop rodaria: toda verificação de `stop` tem também o momento."""
+    return all(momento in item.momentos for item in perfil.verificacoes if STOP in item.momentos)
+
+
+def marcar_portao(raiz: Path, perfil, momento: str, executar=subprocess.run) -> bool:
+    """Grava a marca da árvore quando o portão do `momento` cobre o Stop, e diz se gravou. A marca é só um atalho do
+    Stop: o git que não responde ou o arquivo que não se escreve dão False, sem derrubar o portão já commitado."""
+    if not portao_cobre_o_stop(perfil, momento):
+        return False
+    try:
+        gravar_marca(raiz, marca(raiz, executar), executar)
+    except (bloco.Recusa, OSError):
+        return False
+    return True
+
+
+def portao_rodando(raiz: Path, executar=subprocess.run) -> bool:
+    """Se o portão da própria árvore (o `bloco executado` ou o `bloco finalizar`) está rodando agora, pela trava dele
+    (decisão 27)."""
+    return fila.portao_rodando(fila.arquivo_do_portao(raiz, executar))
+
+
 def no_stop(raiz: Path, perfil, lane: LaneViva, prazo: float | None, executar=subprocess.run,
             sempre: bool = False) -> Relatorio | None:
     """As verificações do `stop` numa lane. A marca é calculada antes; sem `sempre`, marca igual à gravada dá None,
-    sem rodar nada. Sem falha e sem verificação cortada pelo prazo, a marca é gravada."""
+    sem rodar nada, e também quando quem segura a fila é a própria árvore, cujo portão a está verificando. Sem falha e
+    sem verificação cortada pelo prazo, a marca é gravada."""
+    if not sempre and fila.ocupante(fila.arquivo(raiz, executar)) == str(Path(raiz).resolve()):
+        return None
     atual = marca(raiz, executar)
     if not sempre and atual == ler_marca(raiz, executar):
         return None
     relatorio = verificar(raiz, perfil, STOP, mudados(raiz, base_da_arvore(raiz, perfil, lane, executar), executar),
-                          prazo)
+                          prazo, executar=executar)
     if not relatorio.falhou and not relatorio.cortado:
         gravar_marca(raiz, atual, executar)
     return relatorio

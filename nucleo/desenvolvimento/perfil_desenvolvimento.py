@@ -20,7 +20,8 @@ from perfil_comum import (
     textos,
 )
 
-MOMENTOS = ("stop", "finalizar")
+MOMENTOS = ("stop", "executado", "finalizar")
+STOP, EXECUTADO, FINALIZAR = MOMENTOS
 PREFIXOS_DO_PLANEJAMENTO = ("FICHA", "PEND")
 # Um marcador `{<nome>}`, fora do `${...}` do shell.
 RE_MARCADOR = re.compile(r"(?<!\$)\{([a-z][a-z0-9.-]*)\}")

@@ -1859,6 +1859,9 @@ só avisa. Sem falha, as puladas e as sem tempo vão num aviso, sem segurar o tu
 roda. Na lane, as verificações também não rodam em dois casos, e as invariantes seguem: com o bloco em `planning`, ou
 em `blocked` vindo dele, e em `reviewing` com a marca da revisão em andamento de menos de 4 horas (veja
 `harness.py revisao preparar`). Nos dois, o Stop não diz nada pelas verificações e não grava a marca da verificação.
+Com o portão da própria árvore rodando (`bloco executado` ou `bloco finalizar`, pela trava `harness-portao` do
+diretório do git dela), o Stop não roda invariantes nem verificações e não diz nada: o commit do portão passa pelo
+pre-commit.
 
 ```text
 pre-tool: {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
@@ -1910,7 +1913,8 @@ Inicia um projeto pelo plugin, nas duas trilhas (spec do porte 1, §7.5), ou con
   `core.hooksPath` aos githooks e instala os plugins da trilha pelo `claude plugin`, com o `--scope project`: o
   `ela-harness` e, no desenvolvimento, o `ela-harness-papeis`. O `.github/workflows/harness.yml` não vem do modelo:
   o `iniciar` o escreve, nas duas trilhas, igual ao do `gerar`, com o ramo do perfil (no planejamento, o `[ci] ramo`,
-  `main` sem ele), lido sem validar o perfil, e a `ref` do settings já mesclado. O arquivo que já existe fica, com `mantido:`. A `ref`
+  `main` sem ele) e, no desenvolvimento, as verificações de `finalizar` dele, lidos sem validar o perfil, e a `ref`
+  do settings já mesclado. O arquivo que já existe fica, com `mantido:`. A `ref`
   que não é a tag da versão do plugin carregado, ou o settings sem `ref`, dá a linha da recusa e nenhum arquivo, sem recusar o `iniciar`. O
   núcleo, as skills, os agentes e o workflow vêm do plugin e não são copiados.
 - Com o `git config` falhando, sem o `claude` ou com ele falhando, a cópia fica, a linha do `core.hooksPath` ou a dos
@@ -1931,8 +1935,10 @@ Inicia um projeto pelo plugin, nas duas trilhas (spec do porte 1, §7.5), ou con
   pasta ou para o usuário, pelo `claude plugin list --json`, com o tempo limite de 30 s: a instalação vale por pasta,
   e cada clone novo roda os comandos uma vez. O item `.gitignore` confere as linhas fixas e, com o perfil válido, os
   arquivos da lane que o `lane abrir` confere (o `.env` do `env_modelo` e os `env_copiados`), pelo `git check-ignore`.
-  O item `ci` compara o `.github/workflows/harness.yml` com o gerado, pelo ramo do perfil, lido sem validá-lo, e pela
-  `ref` do settings; ausente ou diferente, ou com a recusa de versão ou a do settings, diz `ci: falta`.
+  O item `ci` compara o `.github/workflows/harness.yml` com o gerado, pelo ramo e pelas verificações de `finalizar`
+  do perfil e pela `ref` do settings; ausente ou diferente, ou com a recusa de versão ou a do settings, diz `ci: falta`.
+  Sem o perfil válido, como os itens `passagem` e `invariantes`, diz
+  `ci: falta: o perfil válido; resolva o item perfil primeiro`.
   O item `linear` confere a chave `LINEAR_API_KEY` do ambiente e lê do Linear o time, o projeto e os rótulos do perfil,
   numa chamada só, de no máximo 10 s: diz `linear: ok` ou o que falta, e nunca mostra a chave. Cada linha é
   `<item>: ok` ou `<item>: falta: <o quê>; <comando>`, e um item que falha não impede os seguintes. Sai com 1 se
@@ -2004,7 +2010,8 @@ Recusa com 1, sem gravar, e o `--check` recusa igual, com uma linha por falha, n
   `papel`, como `papel: falta o agente <nome> em <pasta>`; essa falha sai sozinha.
 
 Nas duas trilhas, o comando escreve também o `.github/workflows/harness.yml`, o CI do projeto, com o ramo do perfil (o
-`ramo_principal` no desenvolvimento e o `[ci] ramo` no planejamento, `main` sem ele) e a versão que o
+`ramo_principal` no desenvolvimento e o `[ci] ramo` no planejamento, `main` sem ele), com um job por verificação do
+momento `finalizar` do perfil, no desenvolvimento, e com a versão que o
 `.claude/settings.json` fixa em `extraKnownMarketplaces.ela-harness.source.ref`; o `--check` o confere byte a byte,
 com os mesmos `ausente` e `desatualizado`. Ele não entra nas pastas do gerador nem nos órfãos. Sem o settings, o
 arquivo fica de fora. Duas recusas, com 1, que não impedem a gravação dos outros arquivos:
@@ -2252,18 +2259,24 @@ link e os trechos dos IDs que ela cita, pela cópia da passagem da árvore (`cam
 
 roda as verificações do perfil para o momento, na árvore atual
 
-`harness.py verificar --momento {stop,finalizar}`
+`harness.py verificar --momento {stop,executado,finalizar} [--so <nome>]`
 
 | Argumento ou opção | Obrigatório | O que é |
 |---|---|---|
-| `--momento {stop,finalizar}` | sim | stop: as que casam com o que mudou; finalizar: todas as do fim do bloco |
+| `--momento {stop,executado,finalizar}` | sim | stop: as que casam com o que mudou; executado: todas as do bloco executado; finalizar: todas as do fim do bloco |
+| `--so <nome>` | não | roda só a verificação com esse nome, se ela é do momento |
 
 Roda as verificações do perfil (`[[desenvolvimento.verificacoes]]`) na árvore atual, a lane ou a árvore principal, para
-um dos dois momentos do `--momento`:
+um dos três momentos do `--momento`:
 
 - `stop`: as que têm `stop` em `momentos` e um padrão de `caminhos` que casa com um arquivo mudado; com `caminhos`
   vazio, basta qualquer mudado. Sem mudado, nenhuma roda.
+- `executado`: todas as que têm `executado` em `momentos`, mudado ou não; é o que o `harness.py bloco executado` roda.
 - `finalizar`: todas as que têm `finalizar` em `momentos`, mudado ou não.
+
+Com `--so <nome>`, roda só a verificação com esse nome, se ela é do momento. Se o perfil não a tem naquele momento, o
+comando sai com 1 e a linha `verificar: o perfil não tem a verificação <nome> no momento <momento>`, sem rodar nada.
+No `stop` numa lane, o `--so` não grava a marca.
 
 Mudados são os arquivos do `git diff --name-only <base>...HEAD` e os do `git status`, sem commit e não rastreados. Numa
 lane reconhecida pelos arquivos, a base é o `base` do `estado.md` do bloco, se o commit existe; fora de lane, a
@@ -2271,7 +2284,8 @@ merge-base do HEAD com o ramo principal do origin. Sem HEAD ou sem essa base, to
 rastreados e os não rastreados, sem os ignorados.
 
 Antes de rodar, cada caminho de `requer` precisa existir na raiz. Faltando um, o `stop` dá
-`<nome>: pulada; falta <caminho>`, sem falha, e o `finalizar` dá `<nome>: falta <caminho>`, com falha.
+`<nome>: pulada; falta <caminho>`, sem falha, e o `executado` e o `finalizar` dão `<nome>: falta <caminho>`, com
+falha.
 
 Cada verificação roda por `sh -c "<comando>"`, na raiz da árvore, com o ambiente herdado, a entrada fechada e a saída
 de erro junto da saída, num grupo de processos próprio. Ela acaba quando o `sh` sai, sem esperar o processo em segundo
@@ -2282,6 +2296,9 @@ grupo inteiro morre, os processos em segundo plano inclusive. As linhas:
 - `<nome>: falhou (saída <c>)`, seguida das últimas 30 linhas da saída, com recuo de 2;
 - `<nome>: passou de <t> s`, que conta como falha, seguida das últimas 30 linhas da saída;
 - sem nenhuma a rodar: `nada a verificar`.
+
+No `stop`, a verificação que passa e leva mais de 30 s ganha, no aviso do Stop, a linha
+`<nome>: levou <s> s no Stop; passe-a para o momento executado`. Só sai sem falha, e a marca é gravada do mesmo jeito.
 
 A chave opcional `contagem` de cada `[[desenvolvimento.verificacoes]]` é uma expressão regular, com `re.MULTILINE`, que
 o `verificar` procura na saída inteira; vale a última ocorrência. Com grupos nomeados, a linha traz `<valor> <nome>` de
@@ -2305,12 +2322,26 @@ O comando sai com 0 sem falha e com 1 com alguma. A pulada não é falha.
 Numa lane, o `--momento stop` sem falha grava a marca da árvore, o resumo do HEAD, do `git diff HEAD --binary`, sem o
 diff externo nem o textconv da configuração do usuário, e da lista e do conteúdo dos não rastreados, em
 `harness-verificado`, no diretório do git da lane. O Stop da lane compara a marca antes de rodar: igual à gravada,
-nada roda. O `finalizar` e a árvore principal não gravam marca.
+nada roda. O `bloco executado` e o `bloco finalizar` gravam a mesma marca
+depois do commit da transição, quando toda verificação de `stop` do perfil tem também o momento do portão; assim, o Stop
+seguinte não roda de novo. O `verificar --momento executado`, o `--momento finalizar`, o `--so` e a árvore principal não
+gravam marca.
 
 No Stop, as verificações somam até 840 s, abaixo do tempo limite do hook: cada uma roda com o menor entre o
 `tempo_limite` dela e o que resta, e a que não cabe, por não começar ou por ser interrompida no teto, dá
 `<nome>: sem tempo no Stop; rode harness.py verificar --momento stop`, sem falha e sem gravar a marca. Pelo terminal,
 o `verificar` não tem esse teto.
+
+As verificações rodam uma árvore por vez na máquina: antes da primeira, o `verificar` pega uma trava exclusiva no
+arquivo `harness-fila` do diretório comum do git, que a árvore principal e as lanes dividem, e a solta depois da
+última. Quem espera imprime uma vez, na saída de erro, `fila: esperando a verificação de <árvore>`, com o nome da pasta
+da árvore que segura a trava, ou `outra árvore` antes de ela se escrever no arquivo. No Stop, a espera conta contra os
+840 s: sem a trava até lá, todas dão `sem tempo no Stop`; fora do Stop, a espera não tem prazo, e o `tempo_limite`
+conta só depois da trava. Não há fila no CI, sem verificação a rodar, sem o módulo `fcntl`, fora de um repositório git e dentro do comando
+de uma verificação, que herda a marca `HARNESS_NA_FILA=1`. O Stop de uma lane cuja própria árvore segura a fila, com o
+portão dela rodando, não espera nem verifica. O `bloco executado` e o `bloco finalizar` seguram ainda, do começo ao
+fim, a trava `harness-portao` do diretório do git da própria árvore: o Stop que a acha tomada não roda invariantes nem
+verificações e não espera, e o segundo portão da mesma árvore espera o primeiro, sem aviso.
 
 ## ci
 
@@ -2499,7 +2530,8 @@ As recusas do passo:
   `.superpowers/sdd/` cujo `plan-path` é o `plano.md` do bloco. Sem ela,
   `bloco executado: falta o ledger do SDD do plano.md; rode o /ela-harness:executar-bloco`; com tarefa sem a linha
   `Task <N>: complete`, `bloco executado: o ledger do SDD não dá como feita a tarefa <N>` (`feitas as tarefas 2 e 3`
-  no plural). Grava o `rulings.md` com as linhas `Ruling:` do ledger, uma por linha, ou com
+  no plural). Depois, roda as verificações do momento `executado`; na primeira que falha, recusa com
+  `bloco executado: verificação <nome> falhou`, seguida das linhas da falha. Grava o `rulings.md` com as linhas `Ruling:` do ledger, uma por linha, ou com
   `Nenhuma decisão foi tomada em nome de <dono.nome>.`, e o leva no commit da transição.
 - `revisado`: `bloco revisado: revisao.md tem <n> itens em ## Em aberto` (`1 item` no singular) e
   `bloco revisado: falta revisao.md com a seção ## Em aberto`. Item é a linha que começa, sem recuo, por `-`, `*`,
@@ -2508,6 +2540,10 @@ As recusas do passo:
 - `bloquear "<motivo>"`: grava o `bloqueio` `manual` e o motivo, com os espaços e as quebras juntados num espaço;
   vazio ou `—`, `bloco bloquear: o motivo não pode ficar vazio`. Em `closing`, a recusa é
   `bloco bloquear: <ID> está em closing; rode harness.py bloco corrigir antes`.
+
+O `executado` e o `finalizar`, também na retomada, seguram do começo ao fim a trava `harness-portao` do diretório do
+git da lane; o Stop da lane não confere nada enquanto ela está tomada (veja `harness.py verificar`), e o segundo
+`executado` ou `finalizar` da mesma lane espera o primeiro.
 
 O commit leva só os arquivos do passo que mudaram: o que já estava no índice e o que mudou no disco continuam como
 estavam. Ele roda o pre-commit; recusado, os arquivos que o harness gravou no passo (o `estado.md` e, no `planejado`, o
@@ -3288,6 +3324,7 @@ refaz o espelho das fichas no Linear, sem duplicar nada
 | `nucleo/desenvolvimento/contexto.py` | Context Packet (spec 6c, §10): o pacote de leitura de uma ficha, montado da ficha e da cópia da passagem da árvore. |
 | `nucleo/desenvolvimento/corpo_do_pr.py` | O corpo do PR do bloco: a leitura do arquivo do `--corpo`, a conferência das três seções do molde e a montagem com a aceitação e as verificações. |
 | `nucleo/desenvolvimento/fichas.py` | Fichas do desenvolvimento (spec 6c, §9.1 a §9.3): as da passagem e as do backlog do código, os campos, os IDs citados, a forma e o estado. |
+| `nucleo/desenvolvimento/fila.py` | A fila das verificações: uma árvore por vez na máquina, por uma trava exclusiva no arquivo do diretório comum do git. |
 | `nucleo/desenvolvimento/importacao.py` | Importação da passagem no repositório de código (spec 6c, §8): a tag conferida, a cópia, o relatório e o PR próprio, ou a cópia direta na montagem. |
 | `nucleo/desenvolvimento/iniciar.py` | O `iniciar <trilha>` de um projeto pelo plugin e a conferência do repositório de código (spec do porte 1, §7.5 e §7.6; spec 6d-repositorio, §7). |
 | `nucleo/desenvolvimento/instalacao_ci.py` | A instalação do CI (spec `ci-dos-projetos`, §6.2): os comandos de `[desenvolvimento.ci] instalar`, um por um. |

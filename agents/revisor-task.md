@@ -10,5 +10,5 @@ You review one task of the plan. The dispatch gives you the task text, the imple
 
 - Role: spec review and quality review of that task, following the review prompt template of the SDD.
 - Before reading or changing a file, read the area rules in .claude/rules/harness/ that cover it, as listed in AGENTS.md at the repository root. Do not count on them loading by themselves.
-- Use Bash only to read: run the tests, git log, git diff and git show.
+- Use Bash only to read: run the tests of the task, git log, git diff and git show.
 - Do not edit anything, do not write files and do not review beyond the task.

@@ -1,6 +1,7 @@
 """O texto do `.github/workflows/harness.yml` de cada projeto (spec do CI dos projetos, §4).
 
-É uma função pura da trilha, do ramo principal e da `ref` do plugin que o `.claude/settings.json` fixa.
+É uma função pura da trilha, do ramo principal, da `ref` do plugin que o `.claude/settings.json` fixa e, no
+desenvolvimento, das verificações do momento `finalizar`, que viram a matriz do job `verificacao`.
 
 O `gerar` lê o settings pelo `ler` que recebe e devolve `{}` quando ele não existe. As recusas sobem como
 `RecusaDoCi`, com a linha inteira em `.motivo`. Os SHAs das actions moram aqui, numa definição só, que o gerador e os
@@ -38,11 +39,24 @@ _FALHA_SEM_NUCLEO = (
     "do GitHub."
 )
 
-_MOLDE = """{primeira}
-{stack}# As actions vão fixadas por SHA, que sobe com a versão do plugin: um PR do Dependabot neste arquivo fica \
+_PASSOS_DO_NUCLEO = """      - id: nucleo
+        uses: {checkout}
+        with:
+          repository: {distribuicao}
+          ref: {ref}
+          path: .harness-nucleo
+      - if: failure() && steps.nucleo.outcome == 'failure'
+        run: |
+          echo "{falha}"
+"""
+
+_AVISOS = """# As actions vão fixadas por SHA, que sobe com a versão do plugin: um PR do Dependabot neste arquivo fica \
 vermelho.
 # Se o run cai antes de qualquer passo, a causa provável é a política de actions da conta do GitHub.
-name: harness
+"""
+
+_MOLDE_DO_PLANEJAMENTO = """{primeira}
+""" + _AVISOS + """name: harness
 on:
   push:
     branches: [{ramo}]
@@ -58,16 +72,55 @@ jobs:
       - uses: {checkout}
         with:
           fetch-depth: 0
-      - id: nucleo
-        uses: {checkout}
+{passos}      - uses: ./.harness-nucleo/ci/planejamento
+"""
+
+_MOLDE_DO_DESENVOLVIMENTO = """{primeira}
+{stack}""" + _AVISOS + """name: harness
+on:
+  pull_request:
+    branches: [{ramo}]
+permissions:
+  contents: read
+concurrency:
+  group: harness-${{{{ github.ref }}}}
+  cancel-in-progress: true
+jobs:
+  invariantes:
+    name: invariantes
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: {checkout}
         with:
-          repository: {distribuicao}
-          ref: {ref}
-          path: .harness-nucleo
-      - if: failure() && steps.nucleo.outcome == 'failure'
+          fetch-depth: 0
+{passos}      - uses: ./.harness-nucleo/ci/desenvolvimento
+        with:
+          passo: invariantes
+{verificacao}  harness:
+    name: harness
+    if: always()
+    needs: [{precisa}]
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          RESULTADOS: ${{{{ join(needs.*.result, ' ') }}}}
         run: |
-          echo "{falha}"
-      - uses: ./.harness-nucleo/ci/{trilha}
+          echo "$RESULTADOS"
+          for resultado in $RESULTADOS; do [ "$resultado" = success ] || exit 1; done
+"""
+
+_JOB_DAS_VERIFICACOES = """  verificacao:
+    name: "verificação: ${{{{ matrix.verificacao }}}}"
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        verificacao: [{nomes}]
+    steps:
+      - uses: {checkout}
+""" + "{passos}" + """      - uses: ./.harness-nucleo/ci/desenvolvimento
+        with:
+          verificacao: ${{{{ matrix.verificacao }}}}
 """
 
 
@@ -128,25 +181,33 @@ def conferir_versao(ref: str, versao: str) -> None:
         )
 
 
-def texto(trilha: str, ramo: str, ref: str) -> str:
-    """O YAML do `harness.yml` da trilha (`desenvolvimento` ou `planejamento`), com o ramo e a `ref` dados."""
-    return _MOLDE.format(
-        primeira=_PRIMEIRA_LINHA,
-        stack=_LINHA_DA_STACK if trilha == perfil_comum.DESENVOLVIMENTO else "",
-        ramo=ramo,
-        checkout=uses(CHECKOUT),
-        distribuicao=DISTRIBUICAO,
-        ref=ref,
+def texto(trilha: str, ramo: str, ref: str, verificacoes: tuple[str, ...] = ()) -> str:
+    """O YAML do `harness.yml` da trilha (`desenvolvimento` ou `planejamento`), com o ramo e a `ref` dados. No
+    desenvolvimento, `verificacoes` são os nomes do momento `finalizar`, um job cada; sem nenhum, o job `verificacao`
+    não existe. O planejamento ignora `verificacoes`."""
+    checkout = uses(CHECKOUT)
+    passos = _PASSOS_DO_NUCLEO.format(
+        checkout=checkout, distribuicao=DISTRIBUICAO, ref=ref,
         falha=_FALHA_SEM_NUCLEO.format(distribuicao=DISTRIBUICAO, ref=ref),
-        trilha=trilha,
+    )
+    if trilha != perfil_comum.DESENVOLVIMENTO:
+        return _MOLDE_DO_PLANEJAMENTO.format(
+            primeira=_PRIMEIRA_LINHA, ramo=ramo, checkout=checkout, passos=passos
+        )
+    nomes = ", ".join(json.dumps(nome, ensure_ascii=False) for nome in verificacoes)
+    job = _JOB_DAS_VERIFICACOES.format(checkout=checkout, nomes=nomes, passos=passos) if verificacoes else ""
+    return _MOLDE_DO_DESENVOLVIMENTO.format(
+        primeira=_PRIMEIRA_LINHA, stack=_LINHA_DA_STACK, ramo=ramo, checkout=checkout, passos=passos,
+        verificacao=job, precisa="invariantes, verificacao" if verificacoes else "invariantes",
     )
 
 
-def gerar(ler: Callable[[str], str | None], trilha: str, ramo: str, versao: str) -> dict[str, str]:
-    """`{}` sem settings; senão `{CAMINHO: texto}`, com a `ref` do settings, que tem de ser `v<versao>`. As recusas
-    sobem."""
+def gerar(ler: Callable[[str], str | None], trilha: str, ramo: str, versao: str,
+          verificacoes: tuple[str, ...] = ()) -> dict[str, str]:
+    """`{}` sem settings; senão `{CAMINHO: texto}`, com a `ref` do settings, que tem de ser `v<versao>`, e as
+    `verificacoes` dadas. As recusas sobem."""
     ref = ref_do_settings(ler(SETTINGS))
     if ref is None:
         return {}
     conferir_versao(ref, versao)
-    return {CAMINHO: texto(trilha, ramo, ref)}
+    return {CAMINHO: texto(trilha, ramo, ref, verificacoes)}

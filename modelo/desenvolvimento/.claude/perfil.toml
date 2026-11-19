@@ -22,6 +22,8 @@ legenda = "docs/legenda.md"
 nome = "<nome do dono>"
 github = "<usuario-do-github>"
 
+# momentos: stop roda a cada fim de turno, no que mudou; executado, uma vez, no bloco executado; finalizar, no bloco
+# finalizar e no CI. A verificação do repositório inteiro vai em executado e finalizar.
 [[desenvolvimento.verificacoes]]
 nome = "harness"
 comando = "python3 .claude/harness/harness.py gerar --check"

@@ -43,7 +43,8 @@ Inicia um projeto pelo plugin, nas duas trilhas (spec do porte 1, §7.5), ou con
   `core.hooksPath` aos githooks e instala os plugins da trilha pelo `claude plugin`, com o `--scope project`: o
   `ela-harness` e, no desenvolvimento, o `ela-harness-papeis`. O `.github/workflows/harness.yml` não vem do modelo:
   o `iniciar` o escreve, nas duas trilhas, igual ao do `gerar`, com o ramo do perfil (no planejamento, o `[ci] ramo`,
-  `main` sem ele), lido sem validar o perfil, e a `ref` do settings já mesclado. O arquivo que já existe fica, com `mantido:`. A `ref`
+  `main` sem ele) e, no desenvolvimento, as verificações de `finalizar` dele, lidos sem validar o perfil, e a `ref`
+  do settings já mesclado. O arquivo que já existe fica, com `mantido:`. A `ref`
   que não é a tag da versão do plugin carregado, ou o settings sem `ref`, dá a linha da recusa e nenhum arquivo, sem recusar o `iniciar`. O
   núcleo, as skills, os agentes e o workflow vêm do plugin e não são copiados.
 - Com o `git config` falhando, sem o `claude` ou com ele falhando, a cópia fica, a linha do `core.hooksPath` ou a dos
@@ -64,8 +65,10 @@ Inicia um projeto pelo plugin, nas duas trilhas (spec do porte 1, §7.5), ou con
   pasta ou para o usuário, pelo `claude plugin list --json`, com o tempo limite de 30 s: a instalação vale por pasta,
   e cada clone novo roda os comandos uma vez. O item `.gitignore` confere as linhas fixas e, com o perfil válido, os
   arquivos da lane que o `lane abrir` confere (o `.env` do `env_modelo` e os `env_copiados`), pelo `git check-ignore`.
-  O item `ci` compara o `.github/workflows/harness.yml` com o gerado, pelo ramo do perfil, lido sem validá-lo, e pela
-  `ref` do settings; ausente ou diferente, ou com a recusa de versão ou a do settings, diz `ci: falta`.
+  O item `ci` compara o `.github/workflows/harness.yml` com o gerado, pelo ramo e pelas verificações de `finalizar`
+  do perfil e pela `ref` do settings; ausente ou diferente, ou com a recusa de versão ou a do settings, diz `ci: falta`.
+  Sem o perfil válido, como os itens `passagem` e `invariantes`, diz
+  `ci: falta: o perfil válido; resolva o item perfil primeiro`.
   O item `linear` confere a chave `LINEAR_API_KEY` do ambiente e lê do Linear o time, o projeto e os rótulos do perfil,
   numa chamada só, de no máximo 10 s: diz `linear: ok` ou o que falta, e nunca mostra a chave. Cada linha é
   `<item>: ok` ou `<item>: falta: <o quê>; <comando>`, e um item que falha não impede os seguintes. Sai com 1 se
@@ -169,6 +172,25 @@ def _valores_do_perfil(destino: Path) -> tuple[str, str]:
     backlog = caminhos.get("backlog") if isinstance(caminhos, dict) else None
     return (ramo if isinstance(ramo, str) and ramo else RAMO_PADRAO,
             backlog if isinstance(backlog, str) and backlog else BACKLOG_PADRAO)
+
+
+def _finalizar_do_perfil(destino: Path) -> tuple[str, ...]:
+    """Os nomes das verificações do momento `finalizar` do `.claude/perfil.toml` do destino, na ordem dele, lidos como
+    TOML, sem validar: o que o job `verificacao` do `harness.yml` leva. Sem o perfil legível, ou sem verificação, é
+    vazio."""
+    try:
+        dados = perfil_comum.ler_dados(destino / ".claude" / "perfil.toml")
+    except (OSError, UnicodeDecodeError, perfil_comum.PerfilInvalido):
+        return ()
+    desenvolvimento = dados.get("desenvolvimento")
+    brutas = desenvolvimento.get("verificacoes") if isinstance(desenvolvimento, dict) else None
+    if not isinstance(brutas, list):
+        return ()
+    return tuple(
+        bruta["nome"] for bruta in brutas
+        if isinstance(bruta, dict) and isinstance(bruta.get("nome"), str)
+        and isinstance(bruta.get("momentos"), list) and perfil_desenvolvimento.FINALIZAR in bruta["momentos"]
+    )
 
 
 def _ramo_do_planejamento(destino: Path) -> str:
@@ -395,7 +417,8 @@ def _escrever_o_ci(destino: Path, trilha: str, ramo: str, mantidos: list[str]) -
         mantidos.append(ci.CAMINHO)
         return []
     try:
-        textos = ci.gerar(lambda _: _settings_para_o_ci(destino), trilha, ramo, ci.versao_do_nucleo())
+        verificacoes = _finalizar_do_perfil(destino) if trilha == DESENVOLVIMENTO else ()
+        textos = ci.gerar(lambda _: _settings_para_o_ci(destino), trilha, ramo, ci.versao_do_nucleo(), verificacoes)
     except ci.RecusaDoCi as erro:
         return [erro.motivo]
     for relativo, texto in textos.items():
@@ -587,7 +610,8 @@ def _item_ci(raiz: Path, ramo: str) -> str:
     é a da falta; a recusa da versão ou a do settings dá a linha dela, sem o prefixo `harness.yml: `."""
     falta = f"ci: falta: {_CI} igual ao gerado; rode harness.py gerar"
     try:
-        gerado = ci.gerar(lambda _: _settings_para_o_ci(raiz), DESENVOLVIMENTO, ramo, ci.versao_do_nucleo())
+        gerado = ci.gerar(lambda _: _settings_para_o_ci(raiz), DESENVOLVIMENTO, ramo, ci.versao_do_nucleo(),
+                          _finalizar_do_perfil(raiz))
     except ci.RecusaDoCi as erro:
         return "ci: falta: " + erro.motivo[len(ci.PREFIXO):]
     except OSError:
@@ -715,10 +739,10 @@ def conferir(raiz: Path, claude: str | None, executar=subprocess.run,
     linha_do_perfil, perfil = _perfil(raiz)
     linhas = [linha_do_perfil, _item_plugin(raiz), _com_git(_item_githooks, raiz, "githooks", executar),
               _com_git(lambda r, e: _item_gitignore(r, perfil, e), raiz, ".gitignore", executar)]
-    linhas.append(_item_ci(raiz, _valores_do_perfil(raiz)[0]))
     if perfil is None:
-        linhas += [_SEM_PERFIL.format(item) for item in ("passagem", "invariantes")]
+        linhas += [_SEM_PERFIL.format(item) for item in ("ci", "passagem", "invariantes")]
     else:
+        linhas.append(_item_ci(raiz, _valores_do_perfil(raiz)[0]))
         linhas.append(_com_git(lambda r, e: _item_passagem(r, perfil, e), raiz, "passagem", executar))
         linhas.append(_com_git(lambda r, e: _item_invariantes(r, perfil, e), raiz, "invariantes", executar))
     linhas.append(_item_instalado(raiz, claude, executar))

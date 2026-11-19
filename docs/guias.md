@@ -259,7 +259,7 @@ ou um termo do texto. As chaves e as regras estão em [perfil](referencia.md#per
 
 **Quando:** há diagramas Mermaid no planejamento ou, com `[der]` no perfil, o DDL. Na raiz, copie o workflow do plugin e commite:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Ela-Decora/ela-harness/v0.4.3/ci/planejamento/diagramas.yml -o .github/workflows/diagramas.yml
+curl -fsSL https://raw.githubusercontent.com/Ela-Decora/ela-harness/v0.5.0/ci/planejamento/diagramas.yml -o .github/workflows/diagramas.yml
 ```
 O check `diagramas` valida o Mermaid de `caminhos.planejamento` e, com `[der]`, o DDL num MySQL e num Postgres, pela `ref`
 do `.claude/settings.json`. O `harness.py gerar` reescreve o `harness.yml` inteiro: o CI a mais vai em workflow próprio.
@@ -272,7 +272,7 @@ vez por projeto, numa branch com PR ou, no planejamento sem PR, no ramo de traba
 1. Na raiz, troque o marketplace; os `install` devolvem os plugins que o `remove` tira, o último só no desenvolvimento:
    ```bash
    claude plugin marketplace remove ela-harness --scope project
-   claude plugin marketplace add Ela-Decora/ela-harness#v0.4.3 --scope project
+   claude plugin marketplace add Ela-Decora/ela-harness#v0.5.0 --scope project
    claude plugin install ela-harness@ela-harness --scope project
    claude plugin install ela-harness-papeis@ela-harness --scope project
    ```
@@ -284,7 +284,7 @@ vez por projeto, numa branch com PR ou, no planejamento sem PR, no ramo de traba
    há uma registrada) e siga o lote que ele abrir, pela `/ela-harness:refinar-documento`; sem correção, ele só registra.
 5. Commite e tire o `harness.yml` do robô de dependências: `exclude-paths: [".github/workflows/harness.yml"]` no
    Dependabot, ou `{ "matchFileNames": [".github/workflows/harness.yml"], "enabled": false }` no `packageRules` do Renovate.
-   Com o CI verde, apague o segredo `ELA_HARNESS_TOKEN`, se havia; depois do merge, rode `git merge main` em cada lane.
+   Com o CI verde, apague o segredo `ELA_HARNESS_TOKEN`, se havia; depois do merge, rode `git merge main` em cada lane. No desenvolvimento, o `harness.yml` roda só no PR, com um job por verificação do `finalizar` e o check final `harness`: exija-o na proteção do ramo, com a branch em dia antes do merge.
 
 **Se der errado:**
 - `harness.yml: o plugin carregado é v<X> ...`, `... não fixa ...` ou `plugin: falta` (do `iniciar --conferir`): refaça o 1 e o 3.

@@ -22,13 +22,14 @@ Argumento: `$ARGUMENTS`. Nos comandos, `harness.py` abrevia `python3 .claude/har
 3. **Correção.** Só com argumento (`correção: <orientação>` ou `pr`), leia [references/correcao.md](references/correcao.md) e acrescente as tarefas ao plano.
 4. **SDD.** Invoque a skill `superpowers:subagent-driven-development` pela ferramenta Skill sobre `<bloco>/plano.md`, com os despachos de [references/despachos.md](references/despachos.md).
 5. **Dispensas.** Sem revisão final do branch, sem `superpowers:finishing-a-development-branch` e sem apagar a pasta do plano em `.superpowers/sdd/`, como o `ciclo.md` manda.
-6. **Executado.** Rode `harness.py bloco executado`. Recusado pelo ledger, retome o SDD; pela lane com alterações, devolva ao SDD o arquivo da tarefa. Depois, invoque a skill `ela-harness:revisar-bloco` pela ferramenta Skill, sem perguntar; com a sessão já compactada, ou com o pedido do dono de outra sessão, entregue no lugar a linha de sessão nova do `ciclo.md` e pare.
+6. **Executado.** Rode `harness.py bloco executado` pelo Bash em segundo plano (`run_in_background`), sem redirecionar a saída, e espere a notificação do fim, sem rodá-lo de novo enquanto isso: ele roda as verificações do momento `executado` e pode esperar a vez na fila. Recusado pelo ledger, retome o SDD; pela lane com alterações, devolva ao SDD o arquivo da tarefa; pela verificação (`bloco executado: verificação <nome> falhou`), despache o `ela-harness:implementador-integracao` com a saída da falha e com o `model` e o `effort` da linha dele no `harness.py papel --todos`, para um conserto num commit `fix(<ID>): ...`, que roda o teste que falhou e não a verificação inteira, e rode o `bloco executado` de novo; a mesma verificação vermelha depois de dois consertos vai ao dono (item 4 de Quando chamar o dono). Depois, invoque a skill `ela-harness:revisar-bloco` pela ferramenta Skill, sem perguntar; com a sessão já compactada, ou com o pedido do dono de outra sessão, entregue no lugar a linha de sessão nova do `ciclo.md` e pare.
 
 ## Quando chamar o dono
 
 1. O bloco esbarra numa decisão da passagem: abra `harness.py retorno abrir <ID> --tipo decisao --contradiz "<o que o código mostrou>" --evidencia "<a prova>"`, com o ID da passagem, que trava o bloco até o `harness.py bloco desbloquear`, e pergunte: "O bloco depende de uma decisão que a passagem não traz: <a decisão>. Qual é?"
 2. O SDD chega a uma das quatro paradas que a skill dele nomeia: mostre a parada ao dono, com a pergunta que o SDD escreve.
 3. Falta contexto que nem o plano, nem a spec, nem o código trazem: pergunte o que falta, com a dúvida escrita.
+4. A verificação do `bloco executado` continua vermelha depois de dois consertos: mostre a saída e pergunte como seguir.
 
 ## Retomada
 

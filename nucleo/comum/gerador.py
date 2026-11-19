@@ -39,6 +39,7 @@ import legenda
 import manifesto
 import papeis
 import perfil_comum
+import perfil_desenvolvimento
 import regras
 from manifesto import Area, Manifesto
 from perfil import Perfil, carregar as carregar_perfil
@@ -99,7 +100,8 @@ Recusa com 1, sem gravar, e o `--check` recusa igual, com uma linha por falha, n
   `papel`, como `papel: falta o agente <nome> em <pasta>`; essa falha sai sozinha.
 
 Nas duas trilhas, o comando escreve também o `.github/workflows/harness.yml`, o CI do projeto, com o ramo do perfil (o
-`ramo_principal` no desenvolvimento e o `[ci] ramo` no planejamento, `main` sem ele) e a versão que o
+`ramo_principal` no desenvolvimento e o `[ci] ramo` no planejamento, `main` sem ele), com um job por verificação do
+momento `finalizar` do perfil, no desenvolvimento, e com a versão que o
 `.claude/settings.json` fixa em `extraKnownMarketplaces.ela-harness.source.ref`; o `--check` o confere byte a byte,
 com os mesmos `ausente` e `desatualizado`. Ele não entra nas pastas do gerador nem nos órfãos. Sem o settings, o
 arquivo fica de fora. Duas recusas, com 1, que não impedem a gravação dos outros arquivos:
@@ -139,8 +141,10 @@ _COMENTARIO = f"<!-- {AVISO} -->"
 _FRASE_DA_REGRA = ("Regras de arquitetura desta área, copiadas da passagem. Teste e lint se conferem pelas "
                    "verificações; revisão, na revisão do bloco.")
 _FRASE_DAS_VERIFICACOES = (
-    "O Stop da lane roda as de `stop` cujos caminhos casam com o que mudou; o `bloco finalizar` roda as de "
-    "`finalizar`. A que tem um arquivo de `requer` faltando é pulada no Stop, com aviso, e falha no `bloco finalizar`."
+    "O Stop da lane roda as de `stop` cujos caminhos casam com o que mudou; o `bloco executado` roda as de "
+    "`executado` e o `bloco finalizar`, as de `finalizar`, mudado ou não. A verificação do repositório inteiro vai em "
+    "`executado` e `finalizar`. A que tem um arquivo de `requer` faltando é pulada no Stop, com aviso, e falha nos dois "
+    "portões."
 )
 _SEM_VERIFICACAO = "Nenhuma verificação no perfil."
 _FRASE_DOS_PAPEIS = (
@@ -174,9 +178,9 @@ Chame {dono} só para aprovar a spec, nas confirmações da guarda, nos itens ma
 ## Dispensas das skills de terceiros
 
 - brainstorming, no caminho normal do /{prefixo}planejar-bloco: a ficha já traz o objetivo e o aceite. Não abra com a oferta de pular as perguntas nem com a pergunta aberta, não faça uma pergunta por mensagem, não devolva o desenho por partes e não ofereça o companheiro visual, a busca nem o protótipo; pergunte a {dono} só nos casos de Quem decide. Sem o tamanho do trabalho e sem a leitura do construtor (builder check) sobre a spec escrita. A spec vai para {blocos}/<ID>-<slug>/spec.md, não para docs/superpowers/specs, e quem chama o writing-plans é o /{prefixo}planejar-bloco, depois da aprovação da spec.
-- writing-plans: não peça revisão do plano nem a escolha do método. {dono} aprovou a spec; o método é o subagent-driven-development.
+- writing-plans: não peça revisão do plano nem a escolha do método. {dono} aprovou a spec; o método é o subagent-driven-development. No plano, cada tarefa roda só os testes dos arquivos que ela muda; a suíte e o lint do repositório inteiro ficam para o harness.py bloco executado.
 - A spec vai para {blocos}/<ID>-<slug>/spec.md; o plano, em inglês, para {blocos}/<ID>-<slug>/plano.md.
-- subagent-driven-development: não faça a revisão final do branch nem chame o finishing-a-development-branch, e não apague a pasta do plano em .superpowers/sdd/. Depois da última tarefa, volte ao /{prefixo}executar-bloco, que roda o harness.py bloco executado com o ledger dessa pasta.
+- subagent-driven-development: não faça a revisão final do branch nem chame o finishing-a-development-branch, e não apague a pasta do plano em .superpowers/sdd/. Depois da última tarefa, volte ao /{prefixo}executar-bloco, que roda o harness.py bloco executado com o ledger dessa pasta e as verificações do momento executado.
 - Despache pelo subagent_type: {prefixo}implementador-mecanico ou {prefixo}implementador-integracao por tarefa, {prefixo}revisor-task, {prefixo}re-revisor e, nas rodadas 4 e 5, {prefixo}corretor-tardio, com o texto de despacho do próprio SDD. O model e o effort de cada despacho são os do papeis.md, no lugar da escolha de modelo do SDD.
 - diagnosing-bugs, no /{prefixo}planejar-bloco: pare depois da fase 4. O teste de regressão e a correção são tarefas do plano; tire a instrumentação [DEBUG-...] e a reprodução descartável antes do harness.py bloco planejado.
 - wizard, no /{prefixo}finalizar-bloco: grave o script pelo Write em .superpowers/wizard/, com o .superpowers/wizard/.gitignore (*), sem cp, bash -n, chmod nem execução pela sessão; {dono} o roda no terminal.
@@ -579,13 +583,19 @@ def textos_do_ci(ler: Callable[[str], str | None], perfil,
                  versao: str | None = None) -> tuple[dict[str, str], tuple[str, ...]]:
     """Os textos do `harness.yml` do projeto (vazio sem o `.claude/settings.json`) e as recusas dele, cada uma uma
     linha. O ramo é o `ramo_principal` do perfil de desenvolvimento e o `ramo_do_ci` no de planejamento. A `ref` do
-    settings tem de ser `v<versao>`, com a `versao` None valendo a do núcleo carregado: senão a recusa é de versão."""
+    settings tem de ser `v<versao>`, com a `versao` None valendo a do núcleo carregado: senão a recusa é de versão.
+    No desenvolvimento, o job `verificacao` do texto leva os nomes das verificações do momento `finalizar`, na ordem
+    do perfil."""
+    verificacoes: tuple[str, ...] = ()
     if isinstance(perfil, Perfil):
         trilha, ramo = perfil_comum.PLANEJAMENTO, perfil.ramo_do_ci
     else:
         trilha, ramo = perfil_comum.DESENVOLVIMENTO, perfil.ramo_principal
+        verificacoes = tuple(
+            v.nome for v in perfil.verificacoes if perfil_desenvolvimento.FINALIZAR in v.momentos
+        )
     try:
-        return ci.gerar(ler, trilha, ramo, ci.versao_do_nucleo() if versao is None else versao), ()
+        return ci.gerar(ler, trilha, ramo, ci.versao_do_nucleo() if versao is None else versao, verificacoes), ()
     except ci.RecusaDoCi as erro:
         return {}, (erro.motivo,)
 

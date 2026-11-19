@@ -13,6 +13,7 @@ Lida no passo 4. O `superpowers:subagent-driven-development` manda despachar cad
 - **Texto.** O texto de cada despacho é o modelo de prompt do próprio SDD; não o reescreva.
 - **Modelo e esforço.** O `model` e o `effort` de cada chamada da ferramenta Agent vêm da linha do agente na saída de `harness.py papel --todos`, no lugar da escolha de modelo do SDD. O mod, quando instalado, troca o que vier diferente.
 - **Teste primeiro.** Todo implementador invoca o `superpowers:test-driven-development`.
+- **Testes da tarefa.** No despacho do implementador, a frase do modelo do SDD que manda rodar a suíte inteira antes do commit (`run the full suite once before committing`) sai, e entra `Run only the tests that cover the files you changed; do not run the full suite: bloco executado runs it once, at the end of the block.` O comando de teste que o despacho der de exemplo é o do arquivo da tarefa.
 - **Espera.** Despacho que volta sem o resultado, porque o agente roda em segundo plano: termine o turno e espere a notificação dele. Até ela, nenhuma mensagem traz o resultado, o veredito ou um achado do agente, nem o passo do SDD que depende dele.
 
 ## Sem os scripts do SDD

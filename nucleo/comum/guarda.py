@@ -175,6 +175,9 @@ só avisa. Sem falha, as puladas e as sem tempo vão num aviso, sem segurar o tu
 roda. Na lane, as verificações também não rodam em dois casos, e as invariantes seguem: com o bloco em `planning`, ou
 em `blocked` vindo dele, e em `reviewing` com a marca da revisão em andamento de menos de 4 horas (veja
 `harness.py revisao preparar`). Nos dois, o Stop não diz nada pelas verificações e não grava a marca da verificação.
+Com o portão da própria árvore rodando (`bloco executado` ou `bloco finalizar`, pela trava `harness-portao` do
+diretório do git dela), o Stop não roda invariantes nem verificações e não diz nada: o commit do portão passa pelo
+pre-commit.
 
 ```text
 pre-tool: {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
@@ -818,7 +821,10 @@ def _stop_do_desenvolvimento(payload: dict, raiz: Path, perfil: PerfilDesenvolvi
     pelos arquivos, as verificações de `stop` pela marca, com o prazo contado daqui. A falha bloqueia uma vez, com as
     linhas das verificações que falharam depois de uma quebra, e só avisa com `stop_hook_active`; sem falha, as
     puladas e as sem tempo vão num aviso. No `_sem_verificar`, as verificações não rodam, e a marca de verificação não
-    é gravada (spec 6d-bloco, §8.8)."""
+    é gravada (spec 6d-bloco, §8.8). Com o portão da própria árvore rodando, nada é conferido: o commit dele passa
+    pelo pre-commit (decisão 27)."""
+    if verificacao.portao_rodando(raiz, executar):
+        return None
     prazo = time.monotonic() + verificacao.TETO_DO_STOP
     resumos = [conferencia.resumo for conferencia in invariantes.conferir(raiz, perfil, invariantes.ARVORE,
                                                                            executar=executar) if not conferencia.ok]
@@ -833,7 +839,7 @@ def _stop_do_desenvolvimento(payload: dict, raiz: Path, perfil: PerfilDesenvolvi
         relatorio = verificacao.no_stop(raiz, perfil, lane, prazo, executar)
         if relatorio is not None:
             resumos.extend(relatorio.resumos)
-            detalhes, avisos = relatorio.detalhes, relatorio.avisos
+            detalhes, avisos = relatorio.detalhes, relatorio.avisos + relatorio.lentas
     if resumos:
         juntos = "; ".join(resumos)
         if payload.get("stop_hook_active"):
